@@ -79,6 +79,7 @@ def calcular_edad():
     sust = edades.sustantivo(genero, banda["clave"])
     return jsonify({
         "edad_meses": meses,
+        "edad_legible": edades.formato_legible(meses),
         "banda": banda,
         "sustantivo": sust,
     })

@@ -36,6 +36,24 @@ def edad_en_meses(fecha_nacimiento: date, fecha_referencia: date = None) -> int:
     return max(meses, 0)
 
 
+def formato_legible(meses: int) -> str:
+    """
+    Convierte una edad en meses a un texto natural en años y meses,
+    como lo diría Jimena: "2 años y 10 meses", "1 año", "5 meses".
+    """
+    anios, resto = divmod(meses, 12)
+
+    def _plural(cantidad, palabra):
+        return f"{cantidad} {palabra}" if cantidad == 1 else f"{cantidad} {palabra}s"
+
+    partes = []
+    if anios > 0:
+        partes.append(_plural(anios, "año"))
+    if resto > 0 or not partes:
+        partes.append(_plural(resto, "mes"))
+    return " y ".join(partes)
+
+
 def banda_por_edad(meses: int) -> dict:
     """Devuelve la banda de desarrollo correspondiente a una edad en meses."""
     for lo, hi, clave, etiqueta in BANDAS:

@@ -57,8 +57,9 @@ async function actualizarBanda() {
     });
     if (!resp.ok) throw new Error("no se pudo calcular");
     const datos = await resp.json();
+    const edadMostrar = datos.edad_legible || `${datos.edad_meses} meses`;
     bandaInfo.textContent =
-      `Edad: ${datos.edad_meses} meses · Etapa: ${datos.banda.etiqueta} · ` +
+      `Edad: ${edadMostrar} · Etapa: ${datos.banda.etiqueta} · ` +
       `Rayuela usará "${datos.sustantivo}" para referirse a él/ella.`;
     bandaInfo.classList.remove("error");
   } catch (e) {
