@@ -68,6 +68,16 @@ def find_answer_table(slide, qshape, tol=0.35):
         if shape.shape_id == qshape.shape_id:
             continue
         if shape.shape_type in (19, 5, 6):  # TABLE, FREEFORM, GROUP
+            # Las tablas SIEMPRE pueden recibir texto (celda 0,0). Las formas
+            # sueltas o agrupadas, en cambio, solo sirven como contenedor si
+            # tienen su propio cuadro de texto — de lo contrario son elementos
+            # decorativos (líneas, bordes, marcos) que por su posición pueden
+            # "ganarle" por muy poco a la casilla real y dejarla vacía. Esto
+            # fue justo lo que pasó con un grupo decorativo justo encima de la
+            # tabla de respuesta de "Aspectos a tener en cuenta..." en el
+            # molde de llamada — sin este filtro, la respuesta se perdía.
+            if shape.shape_type != 19 and not shape.has_text_frame:
+                continue
             sx0, sy0, sx1, sy1 = _bbox(shape)
             if sy0 < qy0 - margen:
                 continue  # está por encima de la pregunta: no puede ser su respuesta
@@ -75,7 +85,18 @@ def find_answer_table(slide, qshape, tol=0.35):
             candidates.append((dist, shape))
     if not candidates:
         return None
-    candidates.sort(key=lambda c: c[0])
+    # SEGUNDO FILTRO (descubierto al revisar "Registro de observaciones al
+    # desarrollo infantil mensual"): incluso teniendo su propio cuadro de
+    # texto, hay formas FREEFORM/GROUP puramente decorativas — el "marco" o
+    # fondo dibujado casi exactamente encima de la tabla de respuesta real —
+    # que por estar un poco más cerca de la pregunta le ganan el primer lugar
+    # y dejan la tabla verdadera vacía. En los 34 cuadernos reales y en TODAS
+    # las demás secciones de ambos moldes (familia, talento humano), el
+    # contenedor de respuesta SIEMPRE terminó siendo una TABLA — nunca una
+    # forma suelta o agrupada. Por eso, si entre los candidatos hay alguna
+    # tabla, la preferimos sobre cualquier forma decorativa, y solo usamos
+    # una forma suelta como respaldo si de verdad no hay ninguna tabla cerca.
+    candidates.sort(key=lambda c: (0 if c[1].shape_type == 19 else 1, c[0]))
     return candidates[0][1]
 
 
@@ -88,6 +109,24 @@ def find_shape_by_id(slide_or_group, shape_id):
             if found is not None:
                 return found
     return None
+
+
+def _escribir_en_textframe(tf, text, size):
+    """Limpia un text_frame y escribe `text` (precedido del TAG) en su único
+    párrafo, con el tamaño y color indicados. Lógica compartida entre
+    write_answer (contenedor normal) y write_answer_en_celda (pregunta y
+    respuesta dentro de la misma tabla)."""
+    tf.word_wrap = True
+    for p in list(tf.paragraphs[1:] if len(tf.paragraphs) > 1 else []):
+        p._p.getparent().remove(p._p)
+    p = tf.paragraphs[0]
+    for r in list(p.runs):
+        r._r.getparent().remove(r._r)
+    r = p.add_run()
+    r.text = TAG + text
+    r.font.size = Pt(size)
+    r.font.italic = False
+    r.font.color.rgb = TEXT_COLOR
 
 
 def write_answer(container, text, size=12):
@@ -109,17 +148,45 @@ def write_answer(container, text, size=12):
         # quepa dentro del cuadro — así nunca se desborda, sin importar cuánto
         # redacte la IA.
         tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-    tf.word_wrap = True
-    for p in list(tf.paragraphs[1:] if len(tf.paragraphs) > 1 else []):
-        p._p.getparent().remove(p._p)
-    p = tf.paragraphs[0]
-    for r in list(p.runs):
-        r._r.getparent().remove(r._r)
-    r = p.add_run()
-    r.text = TAG + text
-    r.font.size = Pt(size)
-    r.font.italic = False
-    r.font.color.rgb = TEXT_COLOR
+    _escribir_en_textframe(tf, text, size)
+    return True
+
+
+def find_question_en_tabla(slide, contains):
+    """Busca una pregunta escrita DENTRO de una celda de tabla, en vez de en
+    un cuadro de texto suelto (que es lo normal en los demás moldes).
+
+    Esto pasa, por ejemplo, en la diapositiva de "voces del talento humano"
+    del molde de llamada: dos de las cuatro preguntas quedaron escritas una
+    junto a otra dentro de la MISMA tabla, con su casilla de respuesta vacía
+    justo al lado (misma fila, columna siguiente) — un diseño distinto al de
+    "pregunta en cuadro de texto + tabla de respuesta separada" que usa
+    find_question/find_answer_table. Si no se busca también aquí, esas
+    preguntas son invisibles para Rayuela y sus casillas quedan vacías.
+
+    Devuelve (tabla_shape, fila, columna_de_la_pregunta) o None.
+    """
+    contains_norm = _normalizar(contains).lower()
+    for shape in slide.shapes:
+        if shape.shape_type != 19:  # TABLE
+            continue
+        tabla = shape.table
+        for r, row in enumerate(tabla.rows):
+            for c, cell in enumerate(row.cells):
+                if contains_norm in _normalizar(cell.text_frame.text).lower():
+                    return (shape, r, c)
+    return None
+
+
+def write_answer_en_celda(tabla_shape, fila, columna, text, size=12):
+    """Escribe la respuesta en la celda vecina (misma fila, columna siguiente)
+    de la celda donde está escrita la pregunta — el patrón que usa el molde
+    de llamada para estas dos preguntas en particular."""
+    try:
+        celda = tabla_shape.table.cell(fila, columna + 1)
+    except IndexError:
+        return False
+    _escribir_en_textframe(celda.text_frame, text, size)
     return True
 
 
@@ -135,7 +202,17 @@ def llenar_respuestas(slide, mapa_pregunta_a_texto, tol=0.35, size=12):
     reporte = {}
     for pregunta, texto in mapa_pregunta_a_texto.items():
         q = find_question(slide, pregunta)
-        contenedor = find_answer_table(slide, q, tol=tol)
-        ok = write_answer(contenedor, texto, size=size)
+        if q is not None:
+            contenedor = find_answer_table(slide, q, tol=tol)
+            ok = write_answer(contenedor, texto, size=size)
+        else:
+            # No apareció como cuadro de texto suelto — puede que esté escrita
+            # dentro de una celda de tabla (ver find_question_en_tabla).
+            ubicacion = find_question_en_tabla(slide, pregunta)
+            if ubicacion is not None:
+                tabla_shape, fila, col = ubicacion
+                ok = write_answer_en_celda(tabla_shape, fila, col, texto, size=size)
+            else:
+                ok = False
         reporte[pregunta] = ok
     return reporte
