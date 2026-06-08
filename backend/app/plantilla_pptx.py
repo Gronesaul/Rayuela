@@ -90,7 +90,15 @@ def write_answer(container, text, size=12):
         if not container.has_text_frame:
             return False
         tf = container.text_frame
-        tf.auto_size = MSO_AUTO_SIZE.NONE
+        # Antes usábamos NONE (tamaño fijo). Pero los textos de "voces del
+        # talento humano" suelen ser más largos que los de la familia y el
+        # cuadro de esa diapositiva es más pequeño: con tamaño fijo el texto
+        # se desbordaba y se montaba sobre las casillas vecinas (lo que vio
+        # Alexander en el pantallazo). TEXT_TO_FIT_SHAPE le dice a PowerPoint
+        # que reduzca automáticamente el tamaño de letra hasta que el texto
+        # quepa dentro del cuadro — así nunca se desborda, sin importar cuánto
+        # redacte la IA.
+        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
     tf.word_wrap = True
     for p in list(tf.paragraphs[1:] if len(tf.paragraphs) > 1 else []):
         p._p.getparent().remove(p._p)
