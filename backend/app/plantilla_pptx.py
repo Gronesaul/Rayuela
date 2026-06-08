@@ -19,11 +19,21 @@ TAG = ""
 TEXT_COLOR = RGBColor(0x00, 0x00, 0x00)
 
 
+def _normalizar(texto):
+    """Convierte cualquier secuencia de espacios/saltos de línea en un solo
+    espacio. Algunas preguntas en los moldes oficiales del ICBF traen un
+    salto de línea en medio (p. ej. "...la intencionalidad del\nencuentro?"),
+    mientras que en el código las escribimos con un espacio normal — sin esto,
+    la búsqueda por subcadena no las encuentra y la casilla queda vacía."""
+    return " ".join(texto.split())
+
+
 def find_question(slide, contains):
-    """Busca el cuadro de texto de una pregunta por una subcadena de su texto."""
-    contains_low = contains.lower()
+    """Busca el cuadro de texto de una pregunta por una subcadena de su texto
+    (ignorando saltos de línea y espacios extra, que varían entre moldes)."""
+    contains_norm = _normalizar(contains).lower()
     for shape in slide.shapes:
-        if shape.has_text_frame and contains_low in shape.text_frame.text.lower():
+        if shape.has_text_frame and contains_norm in _normalizar(shape.text_frame.text).lower():
             return shape
     return None
 
