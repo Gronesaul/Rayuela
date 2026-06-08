@@ -1,14 +1,17 @@
 """
 Rayuela — capa de acceso a la base de datos (Postgres en Railway).
 
-Crea la tabla `planeaciones` al arrancar si no existe, y expone
-helpers para insertar, consultar y actualizar registros.
+Crea la tabla `planeaciones` al arrancar si no existe, con migraciones
+seguras (ADD COLUMN IF NOT EXISTS) para no perder datos si ya existía
+una versión anterior del esquema. Expone helpers para insertar,
+consultar y actualizar registros.
 
 La variable DATABASE_URL la inyecta Railway automáticamente cuando
 el servicio Postgres está enlazado al backend en el mismo proyecto.
 """
 
 import os
+import json
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -20,33 +23,47 @@ def _conn():
 
 def init():
     """
-    Crea la tabla `planeaciones` si todavía no existe.
+    Crea la tabla `planeaciones` si no existe todavía, y añade columnas
+    faltantes si hay una versión anterior del esquema (ADD COLUMN IF NOT
+    EXISTS — nunca destruye datos existentes).
     Se llama una vez al arrancar el servidor (desde main.py).
     """
     with _conn() as conn:
         with conn.cursor() as cur:
+            # Esquema completo — se ejecuta solo si la tabla aún no existe
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS planeaciones (
-                    id                        SERIAL PRIMARY KEY,
-                    nombre_nino               TEXT NOT NULL,
-                    fecha_encuentro           DATE NOT NULL,
-                    banda_edad                TEXT,
-                    nombre_ronda              TEXT,
-                    link_ronda                TEXT,
-                    actividad_principal       TEXT,
-                    experiencias_momento_uno  TEXT,
-                    experiencias_momento_dos  TEXT,
-                    experiencias_momento_tres TEXT,
-                    recursos_momento_uno      TEXT[],
-                    recursos_momento_dos      TEXT[],
-                    recursos_momento_tres     TEXT[],
-                    objetos_paquete           TEXT,
-                    estado                    TEXT NOT NULL DEFAULT 'pendiente_voces',
-                    observaciones_encuentro   TEXT,
-                    fecha_creacion            TIMESTAMP NOT NULL DEFAULT NOW(),
-                    fecha_completado          TIMESTAMP
+                    id                      SERIAL PRIMARY KEY,
+                    nombre_nino             TEXT NOT NULL,
+                    fecha_encuentro         DATE NOT NULL,
+                    genero                  TEXT,
+                    tipo_cuaderno           TEXT NOT NULL DEFAULT 'hogar',
+                    banda_clave             TEXT,
+                    banda_etiqueta          TEXT,
+                    actividad_principal     TEXT,
+                    nombre_ronda            TEXT,
+                    link_ronda              TEXT,
+                    objetos_paquete         TEXT,
+                    textos_generados        JSONB,
+                    estado                  TEXT NOT NULL DEFAULT 'pendiente_voces',
+                    observaciones_encuentro TEXT,
+                    fecha_creacion          TIMESTAMP NOT NULL DEFAULT NOW(),
+                    fecha_completado        TIMESTAMP
                 )
             """)
+            # Migraciones seguras: añade columnas que puede faltar en
+            # versiones anteriores del esquema, sin tocar datos existentes
+            for col, definition in [
+                ("genero", "TEXT"),
+                ("tipo_cuaderno", "TEXT"),
+                ("banda_clave", "TEXT"),
+                ("banda_etiqueta", "TEXT"),
+                ("textos_generados", "JSONB"),
+            ]:
+                cur.execute(
+                    f"ALTER TABLE planeaciones "
+                    f"ADD COLUMN IF NOT EXISTS {col} {definition}"
+                )
         conn.commit()
 
 
@@ -54,29 +71,34 @@ def guardar_planeacion(datos):
     """
     Inserta una nueva planeación y devuelve su id.
 
-    `datos` es un dict con las mismas claves que las columnas de la tabla
-    (excepto id, estado, fecha_creacion y fecha_completado, que son
-    automáticos).
+    `datos` debe contener:
+      nombre_nino, fecha_encuentro, genero, tipo_cuaderno,
+      banda_clave, banda_etiqueta, actividad_principal,
+      nombre_ronda, link_ronda, objetos_paquete, textos_generados (dict).
     """
+    datos_db = dict(datos)
+    # psycopg2 no serializa dicts a JSONB automáticamente
+    if isinstance(datos_db.get("textos_generados"), dict):
+        datos_db["textos_generados"] = json.dumps(
+            datos_db["textos_generados"], ensure_ascii=False
+        )
+
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO planeaciones
-                    (nombre_nino, fecha_encuentro, banda_edad,
-                     nombre_ronda, link_ronda, actividad_principal,
-                     experiencias_momento_uno, experiencias_momento_dos,
-                     experiencias_momento_tres,
-                     recursos_momento_uno, recursos_momento_dos,
-                     recursos_momento_tres, objetos_paquete)
+                    (nombre_nino, fecha_encuentro, genero, tipo_cuaderno,
+                     banda_clave, banda_etiqueta, actividad_principal,
+                     nombre_ronda, link_ronda, objetos_paquete,
+                     textos_generados)
                 VALUES
-                    (%(nombre_nino)s, %(fecha_encuentro)s, %(banda_edad)s,
-                     %(nombre_ronda)s, %(link_ronda)s, %(actividad_principal)s,
-                     %(experiencias_momento_uno)s, %(experiencias_momento_dos)s,
-                     %(experiencias_momento_tres)s,
-                     %(recursos_momento_uno)s, %(recursos_momento_dos)s,
-                     %(recursos_momento_tres)s, %(objetos_paquete)s)
+                    (%(nombre_nino)s, %(fecha_encuentro)s, %(genero)s,
+                     %(tipo_cuaderno)s, %(banda_clave)s, %(banda_etiqueta)s,
+                     %(actividad_principal)s, %(nombre_ronda)s,
+                     %(link_ronda)s, %(objetos_paquete)s,
+                     %(textos_generados)s)
                 RETURNING id
-            """, datos)
+            """, datos_db)
             nuevo_id = cur.fetchone()[0]
         conn.commit()
     return nuevo_id
@@ -86,13 +108,13 @@ def listar_pendientes():
     """
     Devuelve todas las planeaciones con estado 'pendiente_voces',
     ordenadas de la más reciente a la más antigua.
-    Solo trae los campos necesarios para la lista (no el texto completo).
+    Solo trae los campos necesarios para la lista (no los textos completos).
     """
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT id, nombre_nino, fecha_encuentro,
-                       actividad_principal, fecha_creacion
+                       actividad_principal, tipo_cuaderno, fecha_creacion
                 FROM planeaciones
                 WHERE estado = 'pendiente_voces'
                 ORDER BY fecha_encuentro DESC
@@ -104,6 +126,7 @@ def obtener_planeacion(planeacion_id):
     """
     Devuelve una planeación completa (todos los campos) por su id,
     o None si no existe.
+    Los textos_generados se devuelven como dict (no como string JSON).
     """
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -112,7 +135,13 @@ def obtener_planeacion(planeacion_id):
                 (planeacion_id,)
             )
             row = cur.fetchone()
-            return dict(row) if row else None
+            if row is None:
+                return None
+            result = dict(row)
+            # textos_generados puede llegar como string si la columna es TEXT
+            if isinstance(result.get("textos_generados"), str):
+                result["textos_generados"] = json.loads(result["textos_generados"])
+            return result
 
 
 def completar_planeacion(planeacion_id, observaciones):

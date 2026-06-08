@@ -350,5 +350,331 @@ def generar_voces():
     return respuesta
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MÓDULO DE PLANEACIÓN
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _llenar_planeacion_en_pptx(prs, tipo, textos, objetos_paquete=""):
+    """
+    Escribe los textos de planeación en las diapositivas correspondientes
+    del cuaderno (slides 0-1 para hogar, 0-3 para llamada).
+    Usa el mismo motor espacial que voces (find_question / find_answer_table).
+    """
+    if tipo == "hogar":
+        # Slide 0: INTENCIONALIDAD + Momento uno (Experiencias)
+        slide0 = prs.slides[0]
+        plantilla_pptx.llenar_respuestas(slide0, {
+            "INTENCIONALIDAD": textos.get("intencionalidad", ""),
+            "conectarnos": textos.get("experiencias_momento_uno", ""),
+        }, size=11)
+
+        # Slide 1: Momentos dos y tres + objetos paquete
+        slide1 = prs.slides[1]
+        mapa1 = {
+            "construyendo juntos": textos.get("experiencias_momento_dos", ""),
+            "comprometernos": textos.get("experiencias_momento_tres", ""),
+        }
+        if objetos_paquete:
+            mapa1["paquete didáctico"] = objetos_paquete
+        plantilla_pptx.llenar_respuestas(slide1, mapa1, size=11)
+
+    else:  # llamada: slides 0-1 y su espejo 2-3
+        for slide_idx in [0, 2]:
+            slide = prs.slides[slide_idx]
+            plantilla_pptx.llenar_respuestas(slide, {
+                "INTENCIONALIDAD": textos.get("intencionalidad", ""),
+                "Descripción de la experiencia": textos.get("descripcion_experiencia", ""),
+                "Tiempo estimado y recursos": textos.get("tiempo_recursos", ""),
+            }, size=11)
+
+        for slide_idx in [1, 3]:
+            slide = prs.slides[slide_idx]
+            if objetos_paquete:
+                plantilla_pptx.llenar_respuestas(slide, {
+                    "paquete didáctico": objetos_paquete,
+                }, size=11)
+
+
+@app.post("/api/planeacion")
+def crear_planeacion():
+    """
+    Recibe los datos de planeación de Jimena, genera los textos con IA,
+    guarda el registro en la BD y devuelve el PPTX de planeación para imprimir.
+
+    Cuerpo JSON esperado:
+    {
+      "nombre": "Hassan Melo Hueso",
+      "fecha_nacimiento": "2024-09-09",
+      "genero": "M",
+      "tipo_cuaderno": "hogar" | "llamada",
+      "actividad_principal": "exploración sensorial con texturas naturales",
+      "nombre_ronda": "Los pollitos dicen",
+      "link_ronda": "https://...",
+      "objetos_paquete": "telas, semillas"   (opcional)
+    }
+    """
+    datos = request.get_json(force=True)
+    requeridos = ["nombre", "fecha_nacimiento", "genero",
+                  "tipo_cuaderno", "actividad_principal"]
+    faltantes = [c for c in requeridos if not datos.get(c)]
+    if faltantes:
+        return jsonify({"error": f"faltan campos: {', '.join(faltantes)}"}), 400
+
+    tipo = datos["tipo_cuaderno"].strip().lower()
+    if tipo not in ("hogar", "llamada"):
+        return jsonify({"error": "tipo_cuaderno debe ser 'hogar' o 'llamada'"}), 400
+
+    try:
+        nacimiento = datetime.strptime(datos["fecha_nacimiento"], "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify({"error": "fecha_nacimiento inválida, use AAAA-MM-DD"}), 400
+
+    meses = edades.edad_en_meses(nacimiento)
+    banda = edades.banda_por_edad(meses)
+
+    # Genera todos los textos de planeación con la API de Claude (en paralelo)
+    textos = redactor.generar_textos_planeacion(
+        tipo=tipo,
+        actividad=datos["actividad_principal"],
+        nombre_nino=datos["nombre"],
+        banda_clave=banda["clave"],
+        banda_etiqueta=banda["etiqueta"],
+        nombre_ronda=datos.get("nombre_ronda", ""),
+        link_ronda=datos.get("link_ronda", ""),
+    )
+
+    # Abre el molde y llena las diapositivas de planeación
+    molde_path = os.path.join(TEMPLATE_DIR, f"molde_{tipo}.pptx")
+    if not os.path.exists(molde_path):
+        return jsonify({"error": f"no se encontró el molde: molde_{tipo}.pptx"}), 500
+
+    prs = Presentation(molde_path)
+    _llenar_planeacion_en_pptx(prs, tipo, textos,
+                                objetos_paquete=datos.get("objetos_paquete", ""))
+
+    # Guarda el registro en la BD con estado 'pendiente_voces'
+    planeacion_id = db.guardar_planeacion({
+        "nombre_nino": datos["nombre"].strip(),
+        "fecha_encuentro": nacimiento.isoformat(),
+        "genero": datos["genero"],
+        "tipo_cuaderno": tipo,
+        "banda_clave": banda["clave"],
+        "banda_etiqueta": banda["etiqueta"],
+        "actividad_principal": datos["actividad_principal"],
+        "nombre_ronda": datos.get("nombre_ronda", ""),
+        "link_ronda": datos.get("link_ronda", ""),
+        "objetos_paquete": datos.get("objetos_paquete", ""),
+        "textos_generados": textos,
+    })
+
+    # Devuelve el PPTX con las diapositivas de planeación listas para imprimir
+    buffer = io.BytesIO()
+    prs.save(buffer)
+    buffer.seek(0)
+
+    nombre_archivo = (
+        f"{datos['nombre'].strip().upper()} - planeacion - "
+        f"{uuid.uuid4().hex[:6]}.pptx"
+    )
+    respuesta = send_file(
+        buffer,
+        as_attachment=True,
+        download_name=nombre_archivo,
+        mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    )
+    respuesta.headers["X-Rayuela-Planeacion-Id"] = str(planeacion_id)
+    return respuesta
+
+
+@app.get("/api/planeaciones")
+def listar_planeaciones():
+    """Lista todas las planeaciones con estado 'pendiente_voces'."""
+    try:
+        pendientes = db.listar_pendientes()
+        # Convierte fechas a string para que JSON las serialice correctamente
+        for p in pendientes:
+            for campo in ("fecha_encuentro", "fecha_creacion"):
+                if p.get(campo) is not None:
+                    p[campo] = str(p[campo])
+        return jsonify(pendientes)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/api/planeacion/<int:planeacion_id>")
+def obtener_planeacion(planeacion_id):
+    """Devuelve todos los datos de una planeación por su id."""
+    plan = db.obtener_planeacion(planeacion_id)
+    if plan is None:
+        return jsonify({"error": "planeación no encontrada"}), 404
+    for campo in ("fecha_encuentro", "fecha_creacion", "fecha_completado"):
+        if plan.get(campo) is not None:
+            plan[campo] = str(plan[campo])
+    return jsonify(plan)
+
+
+@app.post("/api/planeacion/<int:planeacion_id>/completar")
+def completar_planeacion(planeacion_id):
+    """
+    Recibe las observaciones del encuentro real, genera el documento
+    final con voces + planeación ya diligenciadas, y marca el registro
+    como 'completado' en la BD.
+
+    Cuerpo JSON esperado:
+    {
+      "observaciones": "le gustó mucho explorar las telas, se rio bastante..."
+    }
+    """
+    datos = request.get_json(force=True)
+    observaciones = (datos.get("observaciones") or "").strip()
+    if not observaciones:
+        return jsonify({"error": "el campo 'observaciones' es requerido"}), 400
+
+    plan = db.obtener_planeacion(planeacion_id)
+    if plan is None:
+        return jsonify({"error": "planeación no encontrada"}), 404
+
+    tipo = plan["tipo_cuaderno"]
+    banda_clave = plan["banda_clave"]
+    banda_etiqueta = plan["banda_etiqueta"]
+    textos_plan = plan.get("textos_generados") or {}
+
+    # Reconstruye la materia prima para voces usando datos guardados + observaciones
+    materia_prima = (
+        f"Actividad realizada: {plan['actividad_principal']}\n"
+        f"Lo que observé / lo que pasó: {observaciones}"
+    )
+
+    # Genera las voces (misma lógica que /api/generar-voces)
+    preguntas = PREGUNTAS_HOGAR if tipo == "hogar" else PREGUNTAS_LLAMADA
+    instrucciones = {
+        preguntas[0]: "la respuesta de la familia en primera persona ('nosotros como "
+                      "familia') sobre qué les gustó y qué no del encuentro/acompañamiento",
+        preguntas[1]: "la respuesta de la familia en primera persona sobre sugerencias "
+                      "para próximas experiencias",
+        preguntas[2]: "la respuesta de la familia en primera persona sobre lo que "
+                      "aprendieron de este encuentro/acompañamiento",
+        preguntas[3]: "la respuesta de la familia en primera persona sobre los "
+                      "compromisos para el próximo encuentro",
+    }
+
+    preguntas_talento = (PREGUNTAS_TALENTO_HOGAR if tipo == "hogar"
+                         else PREGUNTAS_TALENTO_LLAMADA)
+    instrucciones_talento = {
+        preguntas_talento[0]: "mi reflexión como agente educativa, en primera persona "
+                              "singular, sobre si se alcanzó la intencionalidad pedagógica",
+        preguntas_talento[1]: "mi reflexión como agente educativa, en primera persona "
+                              "singular, sobre cuál fue el mejor momento del encuentro",
+    }
+    if tipo == "hogar":
+        instrucciones_talento.update({
+            preguntas_talento[2]: "mi análisis sobre cómo participó la familia",
+            preguntas_talento[3]: "mis recomendaciones para el próximo encuentro",
+            preguntas_talento[4]: "mi valoración sobre cómo se aprovecharon los materiales",
+        })
+    else:
+        instrucciones_talento[preguntas_talento[2]] = (
+            "mi análisis sobre cómo se vinculó la familia en el acompañamiento a distancia"
+        )
+        instrucciones_talento[preguntas_talento[3]] = (
+            "mis recomendaciones para los próximos acompañamientos a distancia"
+        )
+
+    preguntas_desarrollo = PREGUNTAS_DESARROLLO_LLAMADA if tipo == "llamada" else []
+    instrucciones_desarrollo = {}
+    if tipo == "llamada":
+        primer_nombre = plan["nombre_nino"].strip().split()[0].title()
+        instrucciones_desarrollo = {
+            preguntas_desarrollo[0]: (
+                f"una descripción narrativa, en tercera persona, nombrando a {primer_nombre} "
+                f"por su nombre, sobre qué le gustó del encuentro y cómo participó"
+            ),
+            preguntas_desarrollo[1]: (
+                f"una descripción narrativa, en tercera persona, sobre los intereses y "
+                f"habilidades en desarrollo de {primer_nombre}"
+            ),
+            preguntas_desarrollo[2]: (
+                f"mis recomendaciones profesionales, en primera persona singular, "
+                f"para los próximos acompañamientos de {primer_nombre}"
+            ),
+        }
+
+    # Lanza todas las llamadas a Claude en paralelo
+    trabajos = []
+    for pregunta in preguntas:
+        trabajos.append(("familia", pregunta, dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion=instrucciones[pregunta], materia_prima=materia_prima,
+        )))
+    for pregunta in preguntas_talento:
+        trabajos.append(("talento", pregunta, dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion=instrucciones_talento[pregunta], materia_prima=materia_prima,
+            perspectiva="talento_humano", max_palabras=70,
+        )))
+    for pregunta in preguntas_desarrollo:
+        trabajos.append(("desarrollo", pregunta, dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion=instrucciones_desarrollo[pregunta], materia_prima=materia_prima,
+            perspectiva="desarrollo_infantil", max_palabras=90,
+        )))
+
+    mapa_textos, mapa_talento, mapa_desarrollo = {}, {}, {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(trabajos)) as fondo:
+        futuros = {
+            fondo.submit(redactor.redactar, **kwargs): (destino, pregunta)
+            for destino, pregunta, kwargs in trabajos
+        }
+        for futuro in concurrent.futures.as_completed(futuros):
+            destino, pregunta = futuros[futuro]
+            if destino == "familia":
+                mapa_textos[pregunta] = futuro.result()
+            elif destino == "talento":
+                mapa_talento[pregunta] = futuro.result()
+            else:
+                mapa_desarrollo[pregunta] = futuro.result()
+
+    # Abre el molde y llena PRIMERO la planeación, LUEGO las voces
+    molde_path = os.path.join(TEMPLATE_DIR, f"molde_{tipo}.pptx")
+    if not os.path.exists(molde_path):
+        return jsonify({"error": f"no se encontró el molde: molde_{tipo}.pptx"}), 500
+
+    prs = Presentation(molde_path)
+
+    # Planeación (reutiliza los textos ya guardados en la BD)
+    _llenar_planeacion_en_pptx(prs, tipo, textos_plan,
+                                objetos_paquete=plan.get("objetos_paquete", ""))
+
+    # Voces
+    slide_familia = prs.slides[SLIDE_FAMILIA[tipo]]
+    plantilla_pptx.llenar_respuestas(slide_familia, mapa_textos)
+
+    slide_talento = prs.slides[SLIDE_TALENTO[tipo]]
+    plantilla_pptx.llenar_respuestas(slide_talento, mapa_talento, size=9)
+
+    if tipo == "llamada" and tipo in SLIDE_DESARROLLO:
+        slide_desarrollo = prs.slides[SLIDE_DESARROLLO[tipo]]
+        plantilla_pptx.llenar_respuestas(slide_desarrollo, mapa_desarrollo, size=11)
+
+    # Marca como completado en la BD
+    db.completar_planeacion(planeacion_id, observaciones)
+
+    # Devuelve el cuaderno completo (planeación + voces)
+    buffer = io.BytesIO()
+    prs.save(buffer)
+    buffer.seek(0)
+
+    nombre_archivo = (
+        f"{plan['nombre_nino'].upper()} - cuaderno completo - "
+        f"{uuid.uuid4().hex[:6]}.pptx"
+    )
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=nombre_archivo,
+        mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    )
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)

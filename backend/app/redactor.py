@@ -1,18 +1,9 @@
 """
-Rayuela — capa de redacción asistida (API de Claude).
-
-PRINCIPIO DE DISEÑO (no negociable, viene de la lección aprendida con los 34
-cuadernos de Jimena): la IA NO inventa la actividad ni la observación. Solo
-amplía y redacta en el tono/formato del ICBF lo que Jimena ya escribió en
-bruto. El insumo real siempre viene de ella; Claude multiplica su tiempo,
-no reemplaza su criterio.
-
-Esto también evita el error de fondo que detectamos: texto genérico que no
-encaja con la edad real del niño (p. ej. "participó activamente" en un bebé
-de 2 meses).
+Rayuela - capa de redaccion asistida (API de Claude).
 """
 
 import os
+import concurrent.futures
 from anthropic import Anthropic
 
 MODEL = "claude-sonnet-4-6"
@@ -32,118 +23,240 @@ def _get_client():
     return _client
 
 
-# Banco de estilo: fórmulas reales tomadas de las planeaciones y voces de Jimena.
-# Esto es lo que hace que el resultado "suene a ella" y no a un genérico de internet.
 FORMULAS_REFERENCIA = [
-    "El encuentro inicia con un saludo afectuoso a la familia, propiciando un ambiente de confianza y participación.",
+    "El encuentro inicia con un saludo afectuoso a la familia, propiciando un ambiente de confianza y participacion.",
     "Posteriormente, se invita a la familia a...",
     "Para finalizar, se dialoga con la familia acerca de la importancia de...",
-    "Como familia, nos gustó mucho...",
+    "Como familia, nos gusto mucho...",
     "Como familia, notamos que...",
     "Nos comprometemos como familia a...",
 ]
 
 VOCABULARIO_POR_BANDA = {
-    "0-6m": "estímulos sensoriales, reacciones del bebé (mirar, sonreír, sostener la cabeza, "
-            "calmarse con la voz, balbucear), acompañamiento afectivo. EVITAR verbos de "
-            "participación activa o exploración voluntaria (el bebé de esta edad reacciona, no "
-            "decide ni explora a propósito).",
-    "6-11m": "exploración incipiente, desplazamiento (gatear, arrastrarse), búsqueda de objetos, "
-             "interés y curiosidad, balbuceo intencional. Aquí SÍ es válido decir que el bebé "
-             "'participó', 'se interesó' o 'exploró'.",
-    "1-2a": "autonomía, toma de decisiones, coordinación visomanual, manipulación libre, "
-            "confianza en sus capacidades, lenguaje en formación.",
-    "3-4a": "lenguaje y narración, normas y convivencia, seguimiento de instrucciones, "
-            "creatividad, juego simbólico, relación con pares y familia.",
+    "0-6m": (
+        "estimulos sensoriales, reacciones del bebe (mirar, sonreir, sostener la cabeza, "
+        "calmarse con la voz, balbucear), acompanamiento afectivo. EVITAR verbos de "
+        "participacion activa o exploracion voluntaria."
+    ),
+    "6-11m": (
+        "exploracion incipiente, desplazamiento (gatear, arrastrarse), busqueda de objetos, "
+        "interes y curiosidad, balbuceo intencional."
+    ),
+    "1-2a": (
+        "autonomia, toma de decisiones, coordinacion visomanual, manipulacion libre, "
+        "confianza en sus capacidades, lenguaje en formacion."
+    ),
+    "3-4a": (
+        "lenguaje y narracion, normas y convivencia, seguimiento de instrucciones, "
+        "creatividad, juego simbolico, relacion con pares y familia."
+    ),
 }
 
 
-def _prompt_sistema(banda_clave: str, banda_etiqueta: str, perspectiva: str = "familia") -> str:
+def _prompt_sistema(banda_clave, banda_etiqueta, perspectiva="familia"):
     if perspectiva == "talento_humano":
-        bloque_voz = """Esta vez NO escribes como la familia. Escribes como Jimena misma,
-agente educativa, dando su análisis y reflexión PROFESIONAL sobre el encuentro
-o acompañamiento — en primera persona singular ("considero", "observé", "para
-el próximo encuentro recomendaría..."). Es un texto analítico y reflexivo, de
-quien diseñó y acompañó la actividad, NO la opinión de la familia.
-
-Evita fórmulas de primera persona plural familiar como "como familia, nos
-gustó..." — esas son para la sección de voces de la familia, no para esta."""
+        bloque_voz = (
+            "Esta vez NO escribes como la familia. Escribes como Jimena misma, "
+            "agente educativa, dando su analisis y reflexion PROFESIONAL sobre el encuentro "
+            "o acompanamiento - en primera persona singular ('considero', 'observe', "
+            "'para el proximo encuentro recomendaria...'). Es un texto analitico y reflexivo, "
+            "de quien diseno y acompano la actividad, NO la opinion de la familia. "
+            "Evita formulas de primera persona plural familiar como 'como familia, nos gusto...'."
+        )
+    elif perspectiva == "planeacion":
+        bloque_voz = (
+            "Estas escribiendo la PLANEACION del encuentro - no un reporte de lo que "
+            "ocurrio, sino la descripcion de lo que SE HARA. El texto va en TERCERA PERSONA, "
+            "en tiempo presente o futuro inmediato ('se propicia', 'se desarrolla', 'se invita "
+            "a la familia', 'la agente educativa presentara'), describiendo lo que ocurrira "
+            "durante el encuentro planificado. "
+            "Usa el estilo formal y pedagogico del ICBF, calido pero profesional. "
+            "NO uses primera persona. NO describas algo en pasado."
+        )
     elif perspectiva == "desarrollo_infantil":
-        bloque_voz = """Esta vez escribes una descripción NARRATIVA Y PROFESIONAL, en
-TERCERA PERSONA, sobre el proceso de desarrollo de la niña o el niño durante
-el mes — nombrándolo/a por su nombre de pila tal como te lo indiquen (no
-inventes otro nombre). Es un registro de observación pedagógica: describe lo
-que Jimena observó sobre sus gustos, su forma de participar, sus intereses,
-su manera de comunicarse y de relacionarse con la familia y con otras niñas y
-niños, y cómo va avanzando en su proceso de aprendizaje y desarrollo.
-
-No es la voz de la familia (evita "nosotros como familia") ni la reflexión de
-Jimena sobre su propio quehacer ("considero", "observé que mi actividad
-funcionó"): aquí ella describe AL NIÑO O A LA NIÑA — lo que él o ella hizo,
-sintió, dijo o exploró — no su propia actuación como educadora."""
+        bloque_voz = (
+            "Esta vez escribes una descripcion NARRATIVA Y PROFESIONAL, en TERCERA PERSONA, "
+            "sobre el proceso de desarrollo de la nina o el nino durante el mes - "
+            "nombrandolo/a por su nombre de pila tal como te lo indiquen. "
+            "Es un registro de observacion pedagogica. "
+            "No es la voz de la familia ni la reflexion de Jimena sobre su propio quehacer: "
+            "aqui ella describe AL NINO O A LA NINA."
+        )
     else:
-        bloque_voz = f"""Escribes en la voz de la familia, en primera persona plural
-("nosotros como familia"), relatando su experiencia del encuentro o
-acompañamiento.
+        formulas = "\n".join("- " + f for f in FORMULAS_REFERENCIA)
+        bloque_voz = (
+            "Escribes en la voz de la familia, en primera persona plural "
+            "('nosotros como familia'), relatando su experiencia del encuentro o "
+            "acompanamiento.\n\nEstilo de referencia:\n" + formulas
+        )
 
-Estilo de referencia (imita estas fórmulas y este tono, no las copies literalmente):
-{chr(10).join('- ' + f for f in FORMULAS_REFERENCIA)}"""
-
-    return f"""Eres un asistente de redacción para Jimena, agente educativa del programa
-de Educación Inicial Campesina del ICBF, en una zona rural de Yacopí, Cundinamarca.
-
-Tu única tarea es REDACTAR Y AMPLIAR en el formato y tono del ICBF lo que ella
-te entrega en bruto (ideas sueltas, observaciones, bullets). NO inventes
-actividades, materiales ni observaciones que ella no haya mencionado — solo
-dales forma narrativa profesional y cálida.
-
-El niño/niña de este registro está en la banda de desarrollo: {banda_etiqueta}.
-Vocabulario y enfoque apropiados para esta banda: {VOCABULARIO_POR_BANDA[banda_clave]}
-
-{bloque_voz}
-
-Reglas estrictas:
-- Nunca uses lenguaje impropio para la edad (p. ej. "participó activamente" para un bebé de 0-6 meses).
-- Texto en español de Colombia, cálido pero formal, en párrafos (no listas) salvo que se pida lo contrario.
-- No agregues firmas, encabezados ni metadatos — solo el texto solicitado.
-"""
+    return (
+        "Eres un asistente de redaccion para Jimena, agente educativa del programa "
+        "de Educacion Inicial Campesina del ICBF, en una zona rural de Yacopi, Cundinamarca.\n\n"
+        "Tu unica tarea es REDACTAR Y AMPLIAR en el formato y tono del ICBF lo que ella "
+        "te entrega en bruto. NO inventes actividades, materiales ni observaciones que ella "
+        "no haya mencionado - solo dales forma narrativa profesional y calida.\n\n"
+        "El nino/nina de este registro esta en la banda de desarrollo: " + banda_etiqueta + ".\n"
+        "Vocabulario y enfoque apropiados para esta banda: " + VOCABULARIO_POR_BANDA[banda_clave] + "\n\n"
+        + bloque_voz + "\n\n"
+        "Reglas estrictas:\n"
+        "- Nunca uses lenguaje impropio para la edad.\n"
+        "- Texto en espanol de Colombia, calido pero formal, en parrafos (no listas).\n"
+        "- No agregues firmas, encabezados ni metadatos - solo el texto solicitado.\n"
+    )
 
 
-def redactar(banda_clave: str, banda_etiqueta: str, instruccion: str, materia_prima: str,
-             perspectiva: str = "familia", max_palabras: int = 110) -> str:
-    """
-    Llama a la API de Claude para redactar un bloque de texto.
-
-    `instruccion`: qué se necesita redactar (p.ej. "la intencionalidad pedagógica")
-    `materia_prima`: lo que Jimena escribió en bruto sobre ese punto
-    `perspectiva`: "familia" (voz de la familia, primera persona plural) o
-                   "talento_humano" (reflexión de Jimena como educadora, primera
-                   persona singular)
-    `max_palabras`: tope aproximado de extensión del párrafo. Los cuadros de
-                    "voces del talento humano" son más pequeños (caben 5
-                    preguntas en el mismo espacio donde la familia solo tiene
-                    4), así que ahí pedimos un texto más corto para que quepa
-                    sin desbordarse — en vez de confiar en que PowerPoint
-                    encoja la letra solo (no lo hace en archivos generados
-                    por programa, solo cuando alguien edita el cuadro a mano).
-    """
+def redactar(banda_clave, banda_etiqueta, instruccion, materia_prima,
+             perspectiva="familia", max_palabras=110):
+    """Llama a Claude para redactar un bloque de texto del cuaderno ICBF."""
     client = _get_client()
+    texto_usuario = (
+        "Necesito que redactes lo siguiente: " + instruccion + "\n\n"
+        "Esto es lo que escribi yo (Jimena), tal cual, sin pulir:\n"
+        "'''\n" + materia_prima.strip() + "\n'''\n\n"
+        "Redactalo en el tono y formato indicados, ampliandolo lo necesario "
+        "para que quede como un parrafo completo del documento oficial. "
+        "IMPORTANTE: el espacio del documento es limitado - el parrafo "
+        "completo NO debe superar aproximadamente " + str(max_palabras) + " palabras "
+        "(prefiero que sea conciso y completo a que sea largo y se corte)."
+    )
     msg = client.messages.create(
         model=MODEL,
         max_tokens=600,
         system=_prompt_sistema(banda_clave, banda_etiqueta, perspectiva),
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Necesito que redactes lo siguiente: {instruccion}\n\n"
-                f"Esto es lo que escribí yo (Jimena), tal cual, sin pulir:\n"
-                f"\"\"\"\n{materia_prima.strip()}\n\"\"\"\n\n"
-                f"Redáctalo en el tono y formato indicados, ampliándolo lo necesario "
-                f"para que quede como un párrafo completo del documento oficial. "
-                f"IMPORTANTE: el espacio del documento es limitado — el párrafo "
-                f"completo NO debe superar aproximadamente {max_palabras} palabras "
-                f"(prefiero que sea conciso y completo a que sea largo y se corte)."
-            ),
-        }],
+        messages=[{"role": "user", "content": texto_usuario}],
     )
     return "".join(block.text for block in msg.content if block.type == "text").strip()
+
+
+# -----------------------------------------------------------------------------
+# MODULO DE PLANEACION
+# -----------------------------------------------------------------------------
+
+_GUIA_MOMENTO_UNO = (
+    "Al llegar al hogar, se brinda un saludo cordial a la familia y se favorece "
+    "un ambiente de confianza. Se organiza un espacio comodo, seguro y libre de "
+    "distractores. Se propicia un momento de interaccion afectiva con el/la nino/a/bebe "
+    "para favorecer el vinculo y la disposicion de participar. La actividad se "
+    "complementa con la ronda infantil indicada, incluyendo su nombre y enlace."
+)
+
+_GUIA_MOMENTO_DOS = (
+    "Se desarrollan experiencias pedagogicas significativas, dinamicas, recreativas y "
+    "participativas, orientadas al fortalecimiento de habilidades mediante el juego, "
+    "el arte, la literatura o la exploracion del medio, pertinentes para la edad, nivel "
+    "de desarrollo y contexto familiar del participante."
+)
+
+_GUIA_MOMENTO_TRES = (
+    "Se dialoga con la familia acerca de la importancia de dar continuidad a los "
+    "aprendizajes en el hogar. Se resaltan los beneficios de las actividades realizadas "
+    "y se acuerda implementar en la cotidianidad acciones relacionadas con la experiencia, "
+    "favoreciendo espacios de interaccion, juego, exploracion y afecto."
+)
+
+
+def generar_textos_planeacion(tipo, actividad, nombre_nino, banda_clave,
+                               banda_etiqueta, nombre_ronda="", link_ronda=""):
+    """
+    Genera en paralelo todos los textos del documento de planeacion.
+
+    Para 'hogar': intencionalidad, experiencias_momento_uno/dos/tres
+    Para 'llamada': intencionalidad, descripcion_experiencia, tiempo_recursos
+    """
+    primer_nombre = nombre_nino.strip().split()[0].title()
+    info_base = (
+        "Actividad planeada: " + actividad + "\n"
+        "Participante: " + primer_nombre + " (banda de edad: " + banda_etiqueta + ")"
+    )
+
+    if tipo == "hogar":
+        info_m1 = info_base
+        if nombre_ronda:
+            info_m1 += "\nRonda infantil: " + nombre_ronda
+        if link_ronda:
+            info_m1 += "\nEnlace de la ronda: " + link_ronda
+
+        trabajos = [
+            ("intencionalidad", dict(
+                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+                instruccion=(
+                    "la intencionalidad pedagogica de este encuentro: que habilidades, "
+                    "capacidades, vinculos o aprendizajes se busca fortalecer con esta "
+                    "actividad. Maximo 2 oraciones concisas."
+                ),
+                materia_prima=info_base,
+                perspectiva="planeacion",
+                max_palabras=50,
+            )),
+            ("experiencias_momento_uno", dict(
+                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+                instruccion="el texto del 'Momento uno: conectarnos'. Debe incluir: " + _GUIA_MOMENTO_UNO,
+                materia_prima=info_m1,
+                perspectiva="planeacion",
+                max_palabras=110,
+            )),
+            ("experiencias_momento_dos", dict(
+                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+                instruccion="el texto del 'Momento dos: construyendo juntos'. Debe incluir: " + _GUIA_MOMENTO_DOS,
+                materia_prima=info_base,
+                perspectiva="planeacion",
+                max_palabras=120,
+            )),
+            ("experiencias_momento_tres", dict(
+                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+                instruccion="el texto del 'Momento tres: comprometernos'. Debe incluir: " + _GUIA_MOMENTO_TRES,
+                materia_prima=info_base,
+                perspectiva="planeacion",
+                max_palabras=100,
+            )),
+        ]
+
+    else:  # llamada
+        trabajos = [
+            ("intencionalidad", dict(
+                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+                instruccion=(
+                    "la intencionalidad pedagogica del acompanamiento a distancia: "
+                    "que habilidades o aprendizajes se busca fortalecer. Maximo 2 oraciones."
+                ),
+                materia_prima=info_base,
+                perspectiva="planeacion",
+                max_palabras=50,
+            )),
+            ("descripcion_experiencia", dict(
+                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+                instruccion=(
+                    "la descripcion de la experiencia pedagogica a promover con la familia "
+                    "en el acompanamiento a distancia: como se desarrollara la actividad, "
+                    "que hara la familia, que explorara el/la nino/a/bebe, "
+                    "y como participara cada integrante."
+                ),
+                materia_prima=info_base,
+                perspectiva="planeacion",
+                max_palabras=130,
+            )),
+            ("tiempo_recursos", dict(
+                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+                instruccion=(
+                    "el tiempo estimado y los recursos necesarios para esta actividad: "
+                    "duracion aproximada de cada momento y materiales o herramientas "
+                    "que necesita la familia."
+                ),
+                materia_prima=info_base,
+                perspectiva="planeacion",
+                max_palabras=70,
+            )),
+        ]
+
+    resultados = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(trabajos)) as fondo:
+        futuros = {
+            fondo.submit(redactar, **kwargs): clave
+            for clave, kwargs in trabajos
+        }
+        for futuro in concurrent.futures.as_completed(futuros):
+            clave = futuros[futuro]
+            resultados[clave] = futuro.result()
+
+    return resultados
