@@ -36,20 +36,33 @@ def find_answer_table(slide, qshape, tol=0.35):
     """
     Encuentra el contenedor de respuesta espacialmente más cercano/alineado
     con la pregunta dada (tabla 1x1, freeform o agrupado).
+
+    OJO: usamos el borde SUPERIOR de la pregunta (qy0) como referencia, no el
+    inferior — muchos cuadros de texto de preguntas en los moldes del ICBF
+    tienen una altura "de diseño" mucho mayor que el texto real (quedan con
+    bastante espacio vacío debajo), así que su borde inferior puede estar más
+    cerca de la casilla de la SIGUIENTE pregunta que de la suya propia. Eso
+    fue justo lo que causaba que algunas respuestas se escribieran en la
+    casilla equivocada (y otras se sobreescribieran entre sí).
+
+    Priorizamos la alineación horizontal (misma columna) sobre la cercanía
+    vertical, y solo consideramos contenedores que empiezan en o debajo del
+    inicio de la pregunta.
     """
     if qshape is None:
         return None
     qx0, qy0, qx1, qy1 = _bbox(qshape)
+    margen = Pt(tol * 72)
     candidates = []
     for shape in slide.shapes:
         if shape.shape_id == qshape.shape_id:
             continue
         if shape.shape_type in (19, 5, 6):  # TABLE, FREEFORM, GROUP
             sx0, sy0, sx1, sy1 = _bbox(shape)
-            # debe estar debajo o a la derecha de la pregunta, y razonablemente cerca
-            if sy0 >= qy0 - Pt(tol * 72) or sx0 >= qx0:
-                dist = abs(sy0 - qy1) + abs(sx0 - qx0)
-                candidates.append((dist, shape))
+            if sy0 < qy0 - margen:
+                continue  # está por encima de la pregunta: no puede ser su respuesta
+            dist = abs(sx0 - qx0) * 3 + abs(sy0 - qy0)
+            candidates.append((dist, shape))
     if not candidates:
         return None
     candidates.sort(key=lambda c: c[0])
