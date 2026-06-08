@@ -212,6 +212,10 @@ def generar_voces():
             instruccion=instrucciones_talento[pregunta],
             materia_prima=materia_prima,
             perspectiva="talento_humano",
+            # El cuadro de "voces del talento humano" es más chico (caben 5
+            # preguntas donde el de familia solo tiene 4): pedimos un texto
+            # más corto para que quepa sin desbordarse.
+            max_palabras=70,
         )))
 
     mapa_textos = {}
@@ -240,7 +244,10 @@ def generar_voces():
     reporte = plantilla_pptx.llenar_respuestas(slide, mapa_textos)
 
     slide_talento = prs.slides[SLIDE_TALENTO[tipo]]
-    reporte_talento = plantilla_pptx.llenar_respuestas(slide_talento, mapa_textos_talento)
+    # Letra más pequeña que en la slide de familia (size=12 por defecto):
+    # este cuadro es más chico y trae 5 preguntas en vez de 4, así que con el
+    # mismo tamaño el texto se desborda y se monta sobre las casillas vecinas.
+    reporte_talento = plantilla_pptx.llenar_respuestas(slide_talento, mapa_textos_talento, size=9)
     reporte.update({f"[talento] {k}": v for k, v in reporte_talento.items()})
 
     # 4. Entregamos el archivo

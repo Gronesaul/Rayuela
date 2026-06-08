@@ -97,7 +97,7 @@ Reglas estrictas:
 
 
 def redactar(banda_clave: str, banda_etiqueta: str, instruccion: str, materia_prima: str,
-             perspectiva: str = "familia") -> str:
+             perspectiva: str = "familia", max_palabras: int = 110) -> str:
     """
     Llama a la API de Claude para redactar un bloque de texto.
 
@@ -106,6 +106,13 @@ def redactar(banda_clave: str, banda_etiqueta: str, instruccion: str, materia_pr
     `perspectiva`: "familia" (voz de la familia, primera persona plural) o
                    "talento_humano" (reflexión de Jimena como educadora, primera
                    persona singular)
+    `max_palabras`: tope aproximado de extensión del párrafo. Los cuadros de
+                    "voces del talento humano" son más pequeños (caben 5
+                    preguntas en el mismo espacio donde la familia solo tiene
+                    4), así que ahí pedimos un texto más corto para que quepa
+                    sin desbordarse — en vez de confiar en que PowerPoint
+                    encoja la letra solo (no lo hace en archivos generados
+                    por programa, solo cuando alguien edita el cuadro a mano).
     """
     client = _get_client()
     msg = client.messages.create(
@@ -119,7 +126,10 @@ def redactar(banda_clave: str, banda_etiqueta: str, instruccion: str, materia_pr
                 f"Esto es lo que escribí yo (Jimena), tal cual, sin pulir:\n"
                 f"\"\"\"\n{materia_prima.strip()}\n\"\"\"\n\n"
                 f"Redáctalo en el tono y formato indicados, ampliándolo lo necesario "
-                f"para que quede como un párrafo completo del documento oficial."
+                f"para que quede como un párrafo completo del documento oficial. "
+                f"IMPORTANTE: el espacio del documento es limitado — el párrafo "
+                f"completo NO debe superar aproximadamente {max_palabras} palabras "
+                f"(prefiero que sea conciso y completo a que sea largo y se corte)."
             ),
         }],
     )
