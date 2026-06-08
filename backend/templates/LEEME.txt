@@ -1,0 +1,8 @@
+Coloca aquí los moldes oficiales del ICBF, sin modificar:
+  molde_hogar.pptx
+  molde_llamada.pptx
+
+Estos son los archivos .pptx en blanco que Jimena ya usa y tiene aprobados.
+Rayuela NUNCA genera un PowerPoint desde cero — siempre parte de estos moldes
+y solo reemplaza el texto dentro de los contenedores de respuesta correctos,
+preservando el diseño, los logos y el formato oficial intactos.

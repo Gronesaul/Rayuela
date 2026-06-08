@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rayuela — ayudante para Jimena</title>
+<link rel="stylesheet" href="css/estilo.css">
+</head>
+<body>
+  <header class="encabezado">
+    <h1>🌼 Rayuela</h1>
+    <p>Tu ayudante para armar las voces de familia — en minutos, no en noches enteras.</p>
+  </header>
+
+  <main class="contenedor">
+    <form id="formulario-voces" class="tarjeta">
+      <h2>1. ¿De qué niño o niña vamos a hablar?</h2>
+
+      <label for="nombre">Nombre completo</label>
+      <input type="text" id="nombre" name="nombre" required placeholder="Ej: Hassan Melo Hueso">
+
+      <div class="fila">
+        <div class="campo">
+          <label for="fecha_nacimiento">Fecha de nacimiento</label>
+          <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" required>
+        </div>
+        <div class="campo">
+          <label for="genero">Sexo</label>
+          <select id="genero" name="genero" required>
+            <option value="M">Niño</option>
+            <option value="F">Niña</option>
+          </select>
+        </div>
+      </div>
+
+      <p id="banda-info" class="ayuda" aria-live="polite"></p>
+
+      <h2>2. ¿Qué tipo de cuaderno es?</h2>
+      <div class="fila opciones">
+        <label class="opcion">
+          <input type="radio" name="tipo_cuaderno" value="hogar" checked> Encuentro en el hogar
+        </label>
+        <label class="opcion">
+          <input type="radio" name="tipo_cuaderno" value="llamada"> Acompañamiento por llamada
+        </label>
+      </div>
+
+      <h2>3. Cuéntanos qué pasó (con tus palabras, sin pulir nada)</h2>
+
+      <label for="actividad">¿Qué actividad hicieron?</label>
+      <input type="text" id="actividad" name="actividad" required
+             placeholder="Ej: exploración sensorial con texturas (telas, mantas)">
+
+      <label for="observaciones">¿Qué notaste? ¿Cómo participó el niño o la niña? ¿Qué dijo o hizo la familia?</label>
+      <textarea id="observaciones" name="observaciones" rows="5" required
+        placeholder="Escribe como si me lo estuvieras contando — yo me encargo de redactarlo bien."></textarea>
+
+      <button type="submit" id="boton-generar">✨ Redactar y generar el documento</button>
+
+      <p id="mensaje-estado" class="ayuda" aria-live="polite"></p>
+    </form>
+
+    <aside class="tarjeta nota">
+      <h3>¿Cómo funciona?</h3>
+      <ol>
+        <li>Tú escribes lo que pasó, en tus palabras.</li>
+        <li>Rayuela calcula la edad y la etapa de desarrollo del niño o niña — no tienes que recordarlo.</li>
+        <li>Redacta cada respuesta en el tono que pide el ICBF, ajustado a esa edad.</li>
+        <li>Te entrega el documento ya armado, marcado como borrador, para que lo revises y ajustes con lo que de verdad viviste.</li>
+      </ol>
+      <p class="firma">La tecnología organiza y redacta. Tú sigues siendo quien conoce a cada niño.</p>
+    </aside>
+  </main>
+
+  <footer class="pie">
+    <p>Rayuela · hecho con cariño para Jimena y los niños y niñas de la Posprimaria Guadualito</p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

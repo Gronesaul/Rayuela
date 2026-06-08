@@ -1,0 +1,98 @@
+:root {
+  --naranja: #e8954a;
+  --verde: #6fa987;
+  --crema: #fdf6ee;
+  --texto: #3a3a3a;
+  --borde: #e3d9cc;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--crema);
+  color: var(--texto);
+  line-height: 1.5;
+}
+
+.encabezado {
+  background: linear-gradient(135deg, var(--naranja), var(--verde));
+  color: white;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+.encabezado h1 { margin: 0; font-size: 2.2rem; }
+.encabezado p { margin: .4rem 0 0; opacity: .95; }
+
+.contenedor {
+  max-width: 900px;
+  margin: 1.5rem auto;
+  padding: 0 1rem;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+}
+@media (max-width: 720px) {
+  .contenedor { grid-template-columns: 1fr; }
+}
+
+.tarjeta {
+  background: white;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,.04);
+}
+
+h2 { font-size: 1.05rem; color: var(--naranja); margin: 1.2rem 0 .5rem; }
+h2:first-child { margin-top: 0; }
+
+label { display: block; font-weight: 600; margin: .8rem 0 .3rem; font-size: .92rem; }
+
+input[type="text"], input[type="date"], select, textarea {
+  width: 100%;
+  padding: .65rem .8rem;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+textarea { resize: vertical; }
+
+.fila { display: flex; gap: 1rem; }
+.campo { flex: 1; }
+.opciones { gap: 1.5rem; align-items: center; }
+.opcion { display: flex; align-items: center; gap: .4rem; font-weight: 500; }
+.opcion input { width: auto; margin: 0; }
+
+button {
+  margin-top: 1.4rem;
+  width: 100%;
+  padding: .9rem;
+  background: var(--naranja);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+button:hover { background: #d6803a; }
+button:disabled { background: #cbb89a; cursor: wait; }
+
+.ayuda { font-size: .9rem; color: var(--verde); min-height: 1.2em; margin-top: .6rem; }
+.ayuda.error { color: #c0504d; }
+
+.nota h3 { margin-top: 0; color: var(--verde); }
+.nota ol { padding-left: 1.2rem; }
+.nota li { margin-bottom: .5rem; }
+.firma { font-style: italic; color: var(--naranja); border-top: 1px dashed var(--borde); padding-top: .8rem; }
+
+.pie {
+  text-align: center;
+  padding: 1.5rem;
+  font-size: .85rem;
+  color: #8a8174;
+}
