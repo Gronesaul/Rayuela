@@ -10,7 +10,7 @@
  * una vez esté desplegado (algo como https://rayuela-backend.up.railway.app).
  */
 
-const BACKEND_URL = "https://CAMBIA-ESTO-rayuela-backend.up.railway.app";
+const BACKEND_URL = "https://rayuela-production.up.railway.app";
 
 const formulario = document.getElementById("formulario-voces");
 const bandaInfo = document.getElementById("banda-info");
