@@ -58,7 +58,24 @@ VOCABULARIO_POR_BANDA = {
 }
 
 
-def _prompt_sistema(banda_clave: str, banda_etiqueta: str) -> str:
+def _prompt_sistema(banda_clave: str, banda_etiqueta: str, perspectiva: str = "familia") -> str:
+    if perspectiva == "talento_humano":
+        bloque_voz = """Esta vez NO escribes como la familia. Escribes como Jimena misma,
+agente educativa, dando su análisis y reflexión PROFESIONAL sobre el encuentro
+o acompañamiento — en primera persona singular ("considero", "observé", "para
+el próximo encuentro recomendaría..."). Es un texto analítico y reflexivo, de
+quien diseñó y acompañó la actividad, NO la opinión de la familia.
+
+Evita fórmulas de primera persona plural familiar como "como familia, nos
+gustó..." — esas son para la sección de voces de la familia, no para esta."""
+    else:
+        bloque_voz = f"""Escribes en la voz de la familia, en primera persona plural
+("nosotros como familia"), relatando su experiencia del encuentro o
+acompañamiento.
+
+Estilo de referencia (imita estas fórmulas y este tono, no las copies literalmente):
+{chr(10).join('- ' + f for f in FORMULAS_REFERENCIA)}"""
+
     return f"""Eres un asistente de redacción para Jimena, agente educativa del programa
 de Educación Inicial Campesina del ICBF, en una zona rural de Yacopí, Cundinamarca.
 
@@ -70,8 +87,7 @@ dales forma narrativa profesional y cálida.
 El niño/niña de este registro está en la banda de desarrollo: {banda_etiqueta}.
 Vocabulario y enfoque apropiados para esta banda: {VOCABULARIO_POR_BANDA[banda_clave]}
 
-Estilo de referencia (imita estas fórmulas y este tono, no las copies literalmente):
-{chr(10).join('- ' + f for f in FORMULAS_REFERENCIA)}
+{bloque_voz}
 
 Reglas estrictas:
 - Nunca uses lenguaje impropio para la edad (p. ej. "participó activamente" para un bebé de 0-6 meses).
@@ -80,18 +96,22 @@ Reglas estrictas:
 """
 
 
-def redactar(banda_clave: str, banda_etiqueta: str, instruccion: str, materia_prima: str) -> str:
+def redactar(banda_clave: str, banda_etiqueta: str, instruccion: str, materia_prima: str,
+             perspectiva: str = "familia") -> str:
     """
     Llama a la API de Claude para redactar un bloque de texto.
 
     `instruccion`: qué se necesita redactar (p.ej. "la intencionalidad pedagógica")
     `materia_prima`: lo que Jimena escribió en bruto sobre ese punto
+    `perspectiva`: "familia" (voz de la familia, primera persona plural) o
+                   "talento_humano" (reflexión de Jimena como educadora, primera
+                   persona singular)
     """
     client = _get_client()
     msg = client.messages.create(
         model=MODEL,
         max_tokens=600,
-        system=_prompt_sistema(banda_clave, banda_etiqueta),
+        system=_prompt_sistema(banda_clave, banda_etiqueta, perspectiva),
         messages=[{
             "role": "user",
             "content": (

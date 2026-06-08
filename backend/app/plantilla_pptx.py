@@ -15,8 +15,8 @@ from pptx.util import Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import MSO_AUTO_SIZE
 
-TAG = "» BORRADOR (revisar y ajustar con lo realmente vivido): "
-DRAFT_COLOR = RGBColor(0xC0, 0x50, 0x4D)
+TAG = ""
+TEXT_COLOR = RGBColor(0x00, 0x00, 0x00)
 
 
 def find_question(slide, contains):
@@ -100,8 +100,8 @@ def write_answer(container, text, size=12):
     r = p.add_run()
     r.text = TAG + text
     r.font.size = Pt(size)
-    r.font.italic = True
-    r.font.color.rgb = DRAFT_COLOR
+    r.font.italic = False
+    r.font.color.rgb = TEXT_COLOR
     return True
 
 

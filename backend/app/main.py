@@ -57,6 +57,24 @@ PREGUNTAS_LLAMADA = [
 
 SLIDE_FAMILIA = {"hogar": 2, "llamada": 4}
 
+# Preguntas de "voces del talento humano del servicio" (la reflexión de Jimena
+# como agente educativa, NO la voz de la familia). En el molde de hogar son 5
+# preguntas; en el de llamada el molde oficial solo trae 2.
+PREGUNTAS_TALENTO_HOGAR = [
+    "Considera que se alcanzó la intencionalidad del encuentro",
+    "Cuál fue el mejor momento del encuentro",
+    "Cómo participó la familia",
+    "Qué recomendaciones harían para el próximo encuentro",
+    "Cómo se aprovecharon los materiales propuestos",
+]
+
+PREGUNTAS_TALENTO_LLAMADA = [
+    "Se cumplieron las intencionalidades propuestas",
+    "Describa cómo fue la participación de la familia en el acompañamiento",
+]
+
+SLIDE_TALENTO = {"hogar": 3, "llamada": 5}
+
 
 @app.get("/api/salud")
 def salud():
@@ -147,6 +165,50 @@ def generar_voces():
             materia_prima=materia_prima,
         )
 
+    # 2b. Redactamos también las "voces del talento humano del servicio"
+    # (la reflexión profesional de Jimena como agente educativa — tono
+    # analítico, en primera persona singular, NO la voz de la familia).
+    preguntas_talento = (PREGUNTAS_TALENTO_HOGAR if tipo == "hogar"
+                         else PREGUNTAS_TALENTO_LLAMADA)
+
+    instrucciones_talento = {
+        preguntas_talento[0]: "mi reflexión como agente educativa, en primera persona "
+                              "singular ('considero', 'observé'), sobre si se alcanzó "
+                              "la intencionalidad pedagógica propuesta para este "
+                              "encuentro/acompañamiento, con base en lo que ocurrió",
+        preguntas_talento[1]: "mi reflexión como agente educativa, en primera persona "
+                              "singular, sobre cuál fue el mejor momento del encuentro/"
+                              "acompañamiento y por qué, desde mi mirada profesional",
+    }
+    if tipo == "hogar":
+        instrucciones_talento.update({
+            preguntas_talento[2]: "mi análisis como agente educativa, en primera "
+                                  "persona singular, sobre cómo participó la familia "
+                                  "y quiénes participaron en el encuentro",
+            preguntas_talento[3]: "mis recomendaciones profesionales, en primera "
+                                  "persona singular, para tener en cuenta en el "
+                                  "próximo encuentro",
+            preguntas_talento[4]: "mi valoración como agente educativa, en primera "
+                                  "persona singular, sobre cómo se aprovecharon los "
+                                  "materiales propuestos durante el encuentro",
+        })
+    else:
+        instrucciones_talento[preguntas_talento[1]] = (
+            "mi descripción y análisis, como agente educativa y en primera persona "
+            "singular, de cómo fue la participación de la familia durante el "
+            "acompañamiento a distancia"
+        )
+
+    mapa_textos_talento = {}
+    for pregunta in preguntas_talento:
+        mapa_textos_talento[pregunta] = redactor.redactar(
+            banda_clave=banda["clave"],
+            banda_etiqueta=banda["etiqueta"],
+            instruccion=instrucciones_talento[pregunta],
+            materia_prima=materia_prima,
+            perspectiva="talento_humano",
+        )
+
     # 3. Insertamos el texto en una copia del molde oficial
     molde_path = os.path.join(TEMPLATE_DIR, f"molde_{tipo}.pptx")
     if not os.path.exists(molde_path):
@@ -156,6 +218,10 @@ def generar_voces():
     prs = Presentation(molde_path)
     slide = prs.slides[SLIDE_FAMILIA[tipo]]
     reporte = plantilla_pptx.llenar_respuestas(slide, mapa_textos)
+
+    slide_talento = prs.slides[SLIDE_TALENTO[tipo]]
+    reporte_talento = plantilla_pptx.llenar_respuestas(slide_talento, mapa_textos_talento)
+    reporte.update({f"[talento] {k}": v for k, v in reporte_talento.items()})
 
     # 4. Entregamos el archivo
     buffer = io.BytesIO()
