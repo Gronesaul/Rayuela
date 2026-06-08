@@ -42,12 +42,14 @@ def _bbox(shape):
     return (shape.left, shape.top, shape.left + shape.width, shape.top + shape.height)
 
 
-def find_answer_table(slide, qshape, tol=0.35):
+def _contenedor_mas_cercano(slide, bbox_referencia, excluir_ids, tol=0.35):
     """
-    Encuentra el contenedor de respuesta espacialmente más cercano/alineado
-    con la pregunta dada (tabla 1x1, freeform o agrupado).
+    Núcleo común de búsqueda espacial: dado el rectángulo (bbox) de una
+    pregunta —ya sea un cuadro de texto suelto o una celda de tabla— busca
+    entre las formas de la diapositiva el contenedor de respuesta (tabla,
+    freeform o agrupado) más cercano y alineado con ella.
 
-    OJO: usamos el borde SUPERIOR de la pregunta (qy0) como referencia, no el
+    OJO: usamos el borde SUPERIOR de la pregunta (y0) como referencia, no el
     inferior — muchos cuadros de texto de preguntas en los moldes del ICBF
     tienen una altura "de diseño" mucho mayor que el texto real (quedan con
     bastante espacio vacío debajo), así que su borde inferior puede estar más
@@ -59,13 +61,11 @@ def find_answer_table(slide, qshape, tol=0.35):
     vertical, y solo consideramos contenedores que empiezan en o debajo del
     inicio de la pregunta.
     """
-    if qshape is None:
-        return None
-    qx0, qy0, qx1, qy1 = _bbox(qshape)
+    qx0, qy0, qx1, qy1 = bbox_referencia
     margen = Pt(tol * 72)
     candidates = []
     for shape in slide.shapes:
-        if shape.shape_id == qshape.shape_id:
+        if shape.shape_id in excluir_ids:
             continue
         if shape.shape_type in (19, 5, 6):  # TABLE, FREEFORM, GROUP
             # Las tablas SIEMPRE pueden recibir texto (celda 0,0). Las formas
@@ -98,6 +98,51 @@ def find_answer_table(slide, qshape, tol=0.35):
     # una forma suelta como respaldo si de verdad no hay ninguna tabla cerca.
     candidates.sort(key=lambda c: (0 if c[1].shape_type == 19 else 1, c[0]))
     return candidates[0][1]
+
+
+def find_answer_table(slide, qshape, tol=0.35):
+    """
+    Encuentra el contenedor de respuesta espacialmente más cercano/alineado
+    con la pregunta dada, cuando la pregunta es un cuadro de texto suelto.
+    Delega el cálculo a `_contenedor_mas_cercano` (ver su docstring).
+    """
+    if qshape is None:
+        return None
+    return _contenedor_mas_cercano(slide, _bbox(qshape), {qshape.shape_id}, tol=tol)
+
+
+def _bbox_celda(tabla_shape, fila, columna):
+    """Calcula el rectángulo (x0,y0,x1,y1) de una celda dentro de una tabla,
+    sumando los anchos/altos de las columnas/filas anteriores — python-pptx
+    no expone la posición de una celda directamente, solo la de la tabla
+    completa y el tamaño de cada columna/fila."""
+    tabla = tabla_shape.table
+    x0 = tabla_shape.left + sum(tabla.columns[c].width for c in range(columna))
+    y0 = tabla_shape.top + sum(tabla.rows[r].height for r in range(fila))
+    ancho = tabla.columns[columna].width
+    alto = tabla.rows[fila].height
+    return (x0, y0, x0 + ancho, y0 + alto)
+
+
+def find_answer_table_para_celda(slide, tabla_shape, fila, columna, tol=0.35):
+    """
+    Encuentra el contenedor de respuesta para una pregunta que está escrita
+    DENTRO de una celda de tabla (ver find_question_en_tabla).
+
+    Al revisar la página de "voces del talento humano" del molde de llamada
+    descubrimos que, para estas 2 preguntas en particular, la "celda vecina"
+    (misma fila, columna siguiente) NO es el área de respuesta real: es apenas
+    el resto visual de una celda combinada (columnas de 0.17 y 0.26 pulgadas
+    de ancho — imposible que quepa una respuesta ahí sin desbordarse, que fue
+    justo el problema que vio Alexander). La respuesta real va en una TABLA
+    aparte, ubicada espacialmente cerca de la celda — exactamente el mismo
+    patrón "pregunta en cuadro de texto + tabla de respuesta cercana" que usan
+    las otras preguntas de esa misma página. Por eso reutilizamos la misma
+    búsqueda espacial (`_contenedor_mas_cercano`), partiendo del rectángulo de
+    la celda en lugar del rectángulo de un cuadro de texto.
+    """
+    bbox_pregunta = _bbox_celda(tabla_shape, fila, columna)
+    return _contenedor_mas_cercano(slide, bbox_pregunta, {tabla_shape.shape_id}, tol=tol)
 
 
 def find_shape_by_id(slide_or_group, shape_id):
@@ -178,18 +223,6 @@ def find_question_en_tabla(slide, contains):
     return None
 
 
-def write_answer_en_celda(tabla_shape, fila, columna, text, size=12):
-    """Escribe la respuesta en la celda vecina (misma fila, columna siguiente)
-    de la celda donde está escrita la pregunta — el patrón que usa el molde
-    de llamada para estas dos preguntas en particular."""
-    try:
-        celda = tabla_shape.table.cell(fila, columna + 1)
-    except IndexError:
-        return False
-    _escribir_en_textframe(celda.text_frame, text, size)
-    return True
-
-
 def llenar_respuestas(slide, mapa_pregunta_a_texto, tol=0.35, size=12):
     """
     Recorre un mapa {subcadena_de_pregunta: texto_redactado} y escribe cada
@@ -211,7 +244,8 @@ def llenar_respuestas(slide, mapa_pregunta_a_texto, tol=0.35, size=12):
             ubicacion = find_question_en_tabla(slide, pregunta)
             if ubicacion is not None:
                 tabla_shape, fila, col = ubicacion
-                ok = write_answer_en_celda(tabla_shape, fila, col, texto, size=size)
+                contenedor = find_answer_table_para_celda(slide, tabla_shape, fila, col, tol=tol)
+                ok = write_answer(contenedor, texto, size=size)
             else:
                 ok = False
         reporte[pregunta] = ok
