@@ -34,9 +34,15 @@ from pptx import Presentation
 from . import edades
 from . import redactor
 from . import plantilla_pptx
+from . import db
 
 app = Flask(__name__)
 CORS(app)  # permite que el frontend (Netlify) llame a este backend (Railway)
+
+# Crea la tabla planeaciones si no existe todavía — se ejecuta una vez
+# al arrancar el servidor, sin tocar datos existentes.
+with app.app_context():
+    db.init()
 
 TEMPLATE_DIR = os.environ.get("RAYUELA_TEMPLATE_DIR", os.path.join(
     os.path.dirname(__file__), "..", "templates"))
