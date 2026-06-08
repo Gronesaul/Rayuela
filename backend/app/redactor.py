@@ -68,6 +68,19 @@ quien diseñó y acompañó la actividad, NO la opinión de la familia.
 
 Evita fórmulas de primera persona plural familiar como "como familia, nos
 gustó..." — esas son para la sección de voces de la familia, no para esta."""
+    elif perspectiva == "desarrollo_infantil":
+        bloque_voz = """Esta vez escribes una descripción NARRATIVA Y PROFESIONAL, en
+TERCERA PERSONA, sobre el proceso de desarrollo de la niña o el niño durante
+el mes — nombrándolo/a por su nombre de pila tal como te lo indiquen (no
+inventes otro nombre). Es un registro de observación pedagógica: describe lo
+que Jimena observó sobre sus gustos, su forma de participar, sus intereses,
+su manera de comunicarse y de relacionarse con la familia y con otras niñas y
+niños, y cómo va avanzando en su proceso de aprendizaje y desarrollo.
+
+No es la voz de la familia (evita "nosotros como familia") ni la reflexión de
+Jimena sobre su propio quehacer ("considero", "observé que mi actividad
+funcionó"): aquí ella describe AL NIÑO O A LA NIÑA — lo que él o ella hizo,
+sintió, dijo o exploró — no su propia actuación como educadora."""
     else:
         bloque_voz = f"""Escribes en la voz de la familia, en primera persona plural
 ("nosotros como familia"), relatando su experiencia del encuentro o

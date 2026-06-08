@@ -72,9 +72,23 @@ PREGUNTAS_TALENTO_HOGAR = [
 PREGUNTAS_TALENTO_LLAMADA = [
     "Se cumplieron las intencionalidades propuestas",
     "Describa cómo fue la participación de la familia en el acompañamiento",
+    "Cómo se vinculó la niña, el niño o mujer gestantes en los acompañamientos a distancia",
+    "Qué recomendaciones tienen para los próximos acompañamientos a distancia",
 ]
 
 SLIDE_TALENTO = {"hogar": 3, "llamada": 5}
+
+# El molde de llamada trae, además, una sección que el de hogar NO tiene:
+# "Registro de observaciones al desarrollo infantil mensual" — un registro
+# narrativo, en tercera persona, sobre cómo le fue al niño/a la niña ese mes
+# (gustos, participación, intereses, avances). Solo aplica a "llamada".
+PREGUNTAS_DESARROLLO_LLAMADA = [
+    "Qué le gustó a (nombre de la niña o niño) del encuentro o acompañamiento",
+    "Qué intereses tiene",
+    "Aspectos a tener en cuenta en los próximos encuentros o acompañamiento del siguiente mes",
+]
+
+SLIDE_DESARROLLO = {"llamada": 7}
 
 
 @app.get("/api/salud")
@@ -190,6 +204,50 @@ def generar_voces():
             "singular, de cómo fue la participación de la familia durante el "
             "acompañamiento a distancia"
         )
+        instrucciones_talento[preguntas_talento[2]] = (
+            "mi análisis, como agente educativa y en primera persona singular, "
+            "sobre cómo se vinculó e involucró la niña, el niño o la mujer "
+            "gestante protagonista en los acompañamientos a distancia realizados "
+            "este mes"
+        )
+        instrucciones_talento[preguntas_talento[3]] = (
+            "mis recomendaciones profesionales, en primera persona singular, "
+            "para tener en cuenta en los próximos acompañamientos a distancia"
+        )
+
+    # 2c-bis. "Registro de observaciones al desarrollo infantil mensual" —
+    # esta sección SOLO existe en el molde de llamada (el de hogar no la
+    # trae). Es un registro narrativo en TERCERA PERSONA sobre cómo le fue
+    # al niño/a la niña ese mes (gustos, participación, intereses, avances),
+    # no la voz de la familia ni la reflexión de Jimena sobre su actividad.
+    preguntas_desarrollo = PREGUNTAS_DESARROLLO_LLAMADA if tipo == "llamada" else []
+    instrucciones_desarrollo = {}
+    if tipo == "llamada":
+        nombre_nino = datos["nombre"].strip().split()[0].title()
+        instrucciones_desarrollo = {
+            preguntas_desarrollo[0]: (
+                f"una descripción narrativa, en tercera persona y nombrando a "
+                f"{nombre_nino} por su nombre, sobre qué le gustó y qué no del "
+                f"encuentro o acompañamiento, a qué jugó, sobre qué conversó, "
+                f"cómo participó y cómo se relacionó con los adultos de la "
+                f"familia, con el talento humano y con otras niñas y niños — "
+                f"con base en lo que Jimena observó"
+            ),
+            preguntas_desarrollo[1]: (
+                f"una descripción narrativa, en tercera persona y nombrando a "
+                f"{nombre_nino} por su nombre, sobre qué intereses tiene, cómo "
+                f"comunica sus intereses y necesidades, cómo se relaciona con su "
+                f"familia, y qué aspectos de su desarrollo está apropiando y "
+                f"comprendiendo — con base en lo que Jimena observó"
+            ),
+            preguntas_desarrollo[2]: (
+                f"mis recomendaciones profesionales, en primera persona singular "
+                f"como agente educativa, sobre los aspectos a tener en cuenta en "
+                f"los próximos encuentros o acompañamientos del siguiente mes "
+                f"para favorecer el proceso de desarrollo y aprendizaje de "
+                f"{nombre_nino}"
+            ),
+        }
 
     # 2c. Lanzamos TODAS las llamadas a Claude EN PARALELO (antes se hacían
     # una por una, en fila — con 9 llamadas eso tardaba varios minutos). Cada
@@ -217,9 +275,19 @@ def generar_voces():
             # más corto para que quepa sin desbordarse.
             max_palabras=70,
         )))
+    for pregunta in preguntas_desarrollo:
+        trabajos.append(("desarrollo", pregunta, dict(
+            banda_clave=banda["clave"],
+            banda_etiqueta=banda["etiqueta"],
+            instruccion=instrucciones_desarrollo[pregunta],
+            materia_prima=materia_prima,
+            perspectiva="desarrollo_infantil",
+            max_palabras=90,
+        )))
 
     mapa_textos = {}
     mapa_textos_talento = {}
+    mapa_textos_desarrollo = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(trabajos)) as fondo:
         futuros = {
             fondo.submit(redactor.redactar, **kwargs): (destino, pregunta)
@@ -230,8 +298,10 @@ def generar_voces():
             texto = futuro.result()
             if destino == "familia":
                 mapa_textos[pregunta] = texto
-            else:
+            elif destino == "talento":
                 mapa_textos_talento[pregunta] = texto
+            else:
+                mapa_textos_desarrollo[pregunta] = texto
 
     # 3. Insertamos el texto en una copia del molde oficial
     molde_path = os.path.join(TEMPLATE_DIR, f"molde_{tipo}.pptx")
@@ -249,6 +319,13 @@ def generar_voces():
     # mismo tamaño el texto se desborda y se monta sobre las casillas vecinas.
     reporte_talento = plantilla_pptx.llenar_respuestas(slide_talento, mapa_textos_talento, size=9)
     reporte.update({f"[talento] {k}": v for k, v in reporte_talento.items()})
+
+    # "Registro de observaciones al desarrollo infantil mensual" — solo en llamada
+    if tipo == "llamada" and tipo in SLIDE_DESARROLLO:
+        slide_desarrollo = prs.slides[SLIDE_DESARROLLO[tipo]]
+        reporte_desarrollo = plantilla_pptx.llenar_respuestas(
+            slide_desarrollo, mapa_textos_desarrollo, size=11)
+        reporte.update({f"[desarrollo] {k}": v for k, v in reporte_desarrollo.items()})
 
     # 4. Entregamos el archivo
     buffer = io.BytesIO()
