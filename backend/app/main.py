@@ -24,6 +24,7 @@ Variables de entorno esperadas (configurar en Railway):
 import os
 import io
 import uuid
+import concurrent.futures
 from datetime import datetime
 
 from flask import Flask, request, send_file, jsonify
@@ -156,15 +157,6 @@ def generar_voces():
                       "compromisos para el próximo encuentro",
     }
 
-    mapa_textos = {}
-    for pregunta in preguntas:
-        mapa_textos[pregunta] = redactor.redactar(
-            banda_clave=banda["clave"],
-            banda_etiqueta=banda["etiqueta"],
-            instruccion=instrucciones[pregunta],
-            materia_prima=materia_prima,
-        )
-
     # 2b. Redactamos también las "voces del talento humano del servicio"
     # (la reflexión profesional de Jimena como agente educativa — tono
     # analítico, en primera persona singular, NO la voz de la familia).
@@ -199,15 +191,43 @@ def generar_voces():
             "acompañamiento a distancia"
         )
 
-    mapa_textos_talento = {}
+    # 2c. Lanzamos TODAS las llamadas a Claude EN PARALELO (antes se hacían
+    # una por una, en fila — con 9 llamadas eso tardaba varios minutos). Cada
+    # llamada tarda lo mismo, pero al lanzarlas todas a la vez el tiempo total
+    # se acerca al de UNA sola llamada (unos 20-40 segundos) en vez de la suma
+    # de las 9. Esto es lo que va a hacer que generar el documento sea mucho
+    # más rápido para Jimena.
+    trabajos = []
+    for pregunta in preguntas:
+        trabajos.append(("familia", pregunta, dict(
+            banda_clave=banda["clave"],
+            banda_etiqueta=banda["etiqueta"],
+            instruccion=instrucciones[pregunta],
+            materia_prima=materia_prima,
+        )))
     for pregunta in preguntas_talento:
-        mapa_textos_talento[pregunta] = redactor.redactar(
+        trabajos.append(("talento", pregunta, dict(
             banda_clave=banda["clave"],
             banda_etiqueta=banda["etiqueta"],
             instruccion=instrucciones_talento[pregunta],
             materia_prima=materia_prima,
             perspectiva="talento_humano",
-        )
+        )))
+
+    mapa_textos = {}
+    mapa_textos_talento = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(trabajos)) as fondo:
+        futuros = {
+            fondo.submit(redactor.redactar, **kwargs): (destino, pregunta)
+            for destino, pregunta, kwargs in trabajos
+        }
+        for futuro in concurrent.futures.as_completed(futuros):
+            destino, pregunta = futuros[futuro]
+            texto = futuro.result()
+            if destino == "familia":
+                mapa_textos[pregunta] = texto
+            else:
+                mapa_textos_talento[pregunta] = texto
 
     # 3. Insertamos el texto en una copia del molde oficial
     molde_path = os.path.join(TEMPLATE_DIR, f"molde_{tipo}.pptx")
