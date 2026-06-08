@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rayuela — Planear encuentro</title>
+<link rel="stylesheet" href="css/estilo.css">
+</head>
+<body>
+  <header class="encabezado">
+    <h1>🌼 Rayuela</h1>
+    <p>Planea el encuentro antes de ir — Rayuela redacta la planeación por ti.</p>
+  </header>
+
+  <nav class="nav-principal">
+    <a href="planeacion.html" class="activo">📋 Planear encuentro</a>
+    <a href="pendientes.html">⏳ Pendientes</a>
+    <a href="index.html">✍️ Solo voces</a>
+  </nav>
+
+  <main class="contenedor-simple">
+    <form id="formulario-planeacion" class="tarjeta">
+      <h2>1. ¿De qué niño o niña es el encuentro?</h2>
+
+      <label for="nombre">Nombre completo</label>
+      <input type="text" id="nombre" name="nombre" required
+             placeholder="Ej: Hassan Melo Hueso">
+
+      <div class="fila">
+        <div class="campo">
+          <label for="fecha_nacimiento">Fecha de nacimiento</label>
+          <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" required>
+        </div>
+        <div class="campo">
+          <label for="genero">Sexo</label>
+          <select id="genero" name="genero" required>
+            <option value="M">Niño</option>
+            <option value="F">Niña</option>
+          </select>
+        </div>
+      </div>
+
+      <p id="banda-info" class="ayuda" aria-live="polite"></p>
+
+      <h2>2. ¿Qué tipo de cuaderno es?</h2>
+      <div class="fila opciones">
+        <label class="opcion">
+          <input type="radio" name="tipo_cuaderno" value="hogar" checked>
+          Encuentro en el hogar
+        </label>
+        <label class="opcion">
+          <input type="radio" name="tipo_cuaderno" value="llamada">
+          Acompañamiento por llamada
+        </label>
+      </div>
+
+      <h2>3. ¿Qué vas a hacer?</h2>
+
+      <label for="actividad_principal">Actividad principal del encuentro</label>
+      <input type="text" id="actividad_principal" name="actividad_principal" required
+             placeholder="Ej: exploración sensorial con texturas naturales (telas, semillas)">
+
+      <div class="campos-hogar" id="campos-hogar">
+        <label for="nombre_ronda">Nombre de la ronda infantil <span style="font-weight:400">(opcional)</span></label>
+        <input type="text" id="nombre_ronda" name="nombre_ronda"
+               placeholder="Ej: Los pollitos dicen">
+
+        <label for="link_ronda">Enlace de la ronda <span style="font-weight:400">(opcional)</span></label>
+        <input type="url" id="link_ronda" name="link_ronda"
+               placeholder="https://youtube.com/...">
+      </div>
+
+      <label for="objetos_paquete">Objetos del paquete didáctico <span style="font-weight:400">(opcional)</span></label>
+      <input type="text" id="objetos_paquete" name="objetos_paquete"
+             placeholder="Ej: telas de diferentes texturas, semillas, recipientes">
+
+      <button type="submit" id="boton-planear">✨ Generar planeación</button>
+
+      <p id="mensaje-estado" class="ayuda" aria-live="polite"></p>
+    </form>
+  </main>
+
+  <footer class="pie">
+    <p>Rayuela · hecho con cariño para Jimena y los niños y niñas de la Posprimaria Guadualito</p>
+  </footer>
+
+  <script src="js/planeacion.js"></script>
+</body>
+</html>

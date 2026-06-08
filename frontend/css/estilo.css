@@ -96,3 +96,122 @@ button:disabled { background: #cbb89a; cursor: wait; }
   font-size: .85rem;
   color: #8a8174;
 }
+
+/* ── Navegación ─────────────────────────────────────── */
+.nav-principal {
+  background: white;
+  border-bottom: 2px solid var(--borde);
+  display: flex;
+  justify-content: center;
+  gap: .5rem;
+  padding: .55rem 1rem;
+  flex-wrap: wrap;
+}
+.nav-principal a {
+  text-decoration: none;
+  color: var(--texto);
+  font-weight: 600;
+  font-size: .92rem;
+  padding: .45rem 1rem;
+  border-radius: 10px;
+  transition: background .15s, color .15s;
+}
+.nav-principal a:hover { background: var(--crema); }
+.nav-principal a.activo {
+  background: var(--naranja);
+  color: white;
+}
+
+/* ── Badge conteo pendientes ────────────────────────── */
+.badge {
+  display: inline-block;
+  background: var(--verde);
+  color: white;
+  border-radius: 99px;
+  font-size: .75rem;
+  padding: .1rem .45rem;
+  margin-left: .3rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* ── Lista de pendientes ────────────────────────────── */
+.lista-pendientes { display: flex; flex-direction: column; gap: 1rem; }
+
+.item-pendiente {
+  background: white;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  padding: 1rem 1.2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+.item-pendiente h3 { margin: 0 0 .3rem; color: var(--naranja); font-size: 1rem; }
+.item-meta { font-size: .85rem; color: #8a8174; margin-bottom: .6rem; }
+
+.btn-completar {
+  background: var(--verde);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: .55rem 1.1rem;
+  font-size: .92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-completar:hover { background: #5a9070; }
+.btn-completar:disabled { background: #a0c4b0; cursor: wait; }
+
+.completar-panel {
+  display: none;
+  margin-top: .9rem;
+  padding-top: .9rem;
+  border-top: 1px dashed var(--borde);
+}
+.completar-panel.abierto { display: block; }
+.completar-panel label { display: block; font-weight: 600; margin-bottom: .4rem; font-size: .92rem; }
+.completar-panel textarea {
+  width: 100%;
+  padding: .65rem .8rem;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+}
+.completar-panel button {
+  margin-top: .8rem;
+  width: 100%;
+  padding: .8rem;
+  background: var(--naranja);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s;
+}
+.completar-panel button:hover { background: #d6803a; }
+.completar-panel button:disabled { background: #cbb89a; cursor: wait; }
+
+.sin-pendientes {
+  text-align: center;
+  color: #8a8174;
+  padding: 2rem 1rem;
+  font-style: italic;
+}
+
+/* ── Spinner de carga ───────────────────────────────── */
+.cargando { text-align: center; color: var(--verde); padding: 2rem; font-style: italic; }
+
+/* ── Campo opcional (solo aparece en hogar) ─────────── */
+.campos-hogar { transition: opacity .2s; }
+.campos-hogar.oculto { display: none; }
+
+/* ── Contenedor de página completa (sin sidebar) ───── */
+.contenedor-simple {
+  max-width: 680px;
+  margin: 1.5rem auto;
+  padding: 0 1rem;
+}
