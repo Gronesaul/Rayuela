@@ -132,32 +132,40 @@ def generar_voces():
     Cuerpo esperado (JSON):
     {
       "nombre": "Hassan Melo Hueso",
-      "fecha_nacimiento": "2024-09-09",
-      "genero": "M",
+      "fecha_nacimiento": "2024-09-09",   (no requerido si tipo_participante=="gestante")
+      "genero": "M",                       (no requerido si tipo_participante=="gestante")
       "tipo_cuaderno": "hogar" | "llamada",
+      "tipo_participante": "nino" | "nina" | "bebe" | "gestante"   (opcional, solo llamada)
       "actividad": "exploración sensorial con texturas",
       "observaciones": "le gustó tocar las telas, se rio mucho, ..."
     }
     """
     datos = request.get_json(force=True)
-    requeridos = ["nombre", "fecha_nacimiento", "genero", "tipo_cuaderno",
-                  "actividad", "observaciones"]
+    tipo = (datos.get("tipo_cuaderno") or "").strip().lower()
+    tipo_participante = (datos.get("tipo_participante") or "").strip().lower()
+    es_gestante = tipo == "llamada" and tipo_participante == "gestante"
+
+    requeridos = ["nombre", "tipo_cuaderno", "actividad", "observaciones"]
+    if not es_gestante:
+        requeridos += ["fecha_nacimiento", "genero"]
     faltantes = [c for c in requeridos if not datos.get(c)]
     if faltantes:
         return jsonify({"error": f"faltan campos: {', '.join(faltantes)}"}), 400
 
-    tipo = datos["tipo_cuaderno"].strip().lower()
     if tipo not in SLIDE_FAMILIA:
         return jsonify({"error": "tipo_cuaderno debe ser 'hogar' o 'llamada'"}), 400
 
-    try:
-        nacimiento = datetime.strptime(datos["fecha_nacimiento"], "%Y-%m-%d").date()
-    except ValueError:
-        return jsonify({"error": "fecha_nacimiento inválida, use AAAA-MM-DD"}), 400
-
     # 1. Calculamos la banda de edad — sin depender de la memoria de Jimena
-    meses = edades.edad_en_meses(nacimiento)
-    banda = edades.banda_por_edad(meses)
+    #    (la mujer gestante no tiene fecha de nacimiento ni banda de edad)
+    if es_gestante:
+        banda = {"clave": "gestante", "etiqueta": "Mujer gestante"}
+    else:
+        try:
+            nacimiento = datetime.strptime(datos["fecha_nacimiento"], "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"error": "fecha_nacimiento inválida, use AAAA-MM-DD"}), 400
+        meses = edades.edad_en_meses(nacimiento)
+        banda = edades.banda_por_edad(meses)
 
     # 2. Redactamos cada respuesta con la API de Claude, en el tono correcto
     preguntas = PREGUNTAS_HOGAR if tipo == "hogar" else PREGUNTAS_LLAMADA
@@ -226,9 +234,10 @@ def generar_voces():
     # trae). Es un registro narrativo en TERCERA PERSONA sobre cómo le fue
     # al niño/a la niña ese mes (gustos, participación, intereses, avances),
     # no la voz de la familia ni la reflexión de Jimena sobre su actividad.
-    preguntas_desarrollo = PREGUNTAS_DESARROLLO_LLAMADA if tipo == "llamada" else []
+    preguntas_desarrollo = (PREGUNTAS_DESARROLLO_LLAMADA
+                            if (tipo == "llamada" and not es_gestante) else [])
     instrucciones_desarrollo = {}
-    if tipo == "llamada":
+    if tipo == "llamada" and not es_gestante:
         nombre_nino = datos["nombre"].strip().split()[0].title()
         instrucciones_desarrollo = {
             preguntas_desarrollo[0]: (
@@ -268,6 +277,7 @@ def generar_voces():
             banda_etiqueta=banda["etiqueta"],
             instruccion=instrucciones[pregunta],
             materia_prima=materia_prima,
+            evitar_actividad=(tipo == "llamada"),
         )))
     for pregunta in preguntas_talento:
         trabajos.append(("talento", pregunta, dict(
@@ -280,6 +290,7 @@ def generar_voces():
             # preguntas donde el de familia solo tiene 4): pedimos un texto
             # más corto para que quepa sin desbordarse.
             max_palabras=70,
+            evitar_actividad=(tipo == "llamada"),
         )))
     for pregunta in preguntas_desarrollo:
         trabajos.append(("desarrollo", pregunta, dict(
@@ -289,6 +300,7 @@ def generar_voces():
             materia_prima=materia_prima,
             perspectiva="desarrollo_infantil",
             max_palabras=90,
+            evitar_actividad=True,
         )))
 
     mapa_textos = {}
@@ -326,8 +338,10 @@ def generar_voces():
     reporte_talento = plantilla_pptx.llenar_respuestas(slide_talento, mapa_textos_talento, size=9)
     reporte.update({f"[talento] {k}": v for k, v in reporte_talento.items()})
 
-    # "Registro de observaciones al desarrollo infantil mensual" — solo en llamada
-    if tipo == "llamada" and tipo in SLIDE_DESARROLLO:
+    # "Registro de observaciones al desarrollo infantil mensual" — solo en
+    # llamada, y nunca cuando el participante es una mujer gestante (no se
+    # hace registro de desarrollo infantil en ese caso).
+    if tipo == "llamada" and tipo in SLIDE_DESARROLLO and not es_gestante:
         slide_desarrollo = prs.slides[SLIDE_DESARROLLO[tipo]]
         reporte_desarrollo = plantilla_pptx.llenar_respuestas(
             slide_desarrollo, mapa_textos_desarrollo, size=11)
@@ -378,21 +392,31 @@ def _llenar_planeacion_en_pptx(prs, tipo, textos, objetos_paquete=""):
             mapa1["paquete didáctico"] = objetos_paquete
         plantilla_pptx.llenar_respuestas(slide1, mapa1, size=11)
 
-    else:  # llamada: slides 0-1 y su espejo 2-3
-        for slide_idx in [0, 2]:
-            slide = prs.slides[slide_idx]
-            plantilla_pptx.llenar_respuestas(slide, {
-                "INTENCIONALIDAD": textos.get("intencionalidad", ""),
-                "Descripción de la experiencia": textos.get("descripcion_experiencia", ""),
-                "Tiempo estimado y recursos": textos.get("tiempo_recursos", ""),
+    else:  # llamada: DOS planeaciones independientes (slides 0-1 y 2-3)
+        # Slide intro (0 y 2): INTENCIONALIDAD propia de cada planeación +
+        # la "Experiencia pedagógica a promover con la familia" (texto fijo
+        # de saludo + canción, igual para ambas salvo la canción).
+        # Slide principal (1 y 3): la "Experiencia pedagógica principal",
+        # completamente dinámica y propia de cada planeación.
+        pares = [(0, 1, "1"), (2, 3, "2")]
+        for slide_intro_idx, slide_principal_idx, n in pares:
+            slide_intro = prs.slides[slide_intro_idx]
+            plantilla_pptx.llenar_respuestas(slide_intro, {
+                "INTENCIONALIDAD": textos.get(f"intencionalidad_{n}", ""),
+                "Descripción de la experiencia": textos.get(f"intro_descripcion_{n}", ""),
+                "Tiempo estimado y recursos": textos.get("intro_tiempo_recursos", ""),
             }, size=11)
 
-        for slide_idx in [1, 3]:
-            slide = prs.slides[slide_idx]
+            slide_principal = prs.slides[slide_principal_idx]
+            mapa_principal = {
+                "Descripción de la experiencia": textos.get(
+                    f"experiencia_principal_descripcion_{n}", ""),
+                "Tiempo estimado y recursos": textos.get(
+                    f"experiencia_principal_tiempo_recursos_{n}", ""),
+            }
             if objetos_paquete:
-                plantilla_pptx.llenar_respuestas(slide, {
-                    "paquete didáctico": objetos_paquete,
-                }, size=11)
+                mapa_principal["paquete didáctico"] = objetos_paquete
+            plantilla_pptx.llenar_respuestas(slide_principal, mapa_principal, size=11)
 
 
 @app.post("/api/planeacion")
@@ -401,47 +425,100 @@ def crear_planeacion():
     Recibe los datos de planeación de Jimena, genera los textos con IA,
     guarda el registro en la BD y devuelve el PPTX de planeación para imprimir.
 
-    Cuerpo JSON esperado:
+    Cuerpo JSON esperado para "hogar":
     {
       "nombre": "Hassan Melo Hueso",
       "fecha_nacimiento": "2024-09-09",
       "genero": "M",
-      "tipo_cuaderno": "hogar" | "llamada",
+      "tipo_cuaderno": "hogar",
       "actividad_principal": "exploración sensorial con texturas naturales",
       "nombre_ronda": "Los pollitos dicen",
       "link_ronda": "https://...",
       "objetos_paquete": "telas, semillas"   (opcional)
     }
+
+    Cuerpo JSON esperado para "llamada" (dos planeaciones independientes):
+    {
+      "nombre": "Hassan Melo Hueso",
+      "tipo_cuaderno": "llamada",
+      "tipo_participante": "nino" | "nina" | "bebe" | "gestante",
+      "fecha_nacimiento": "2024-09-09",   (no requerido si tipo_participante=="gestante")
+      "genero": "M",                       (no requerido si tipo_participante=="gestante")
+      "actividad_principal": "tema/experiencia de la planeación 1",
+      "nombre_ronda": "canción 1", "link_ronda": "...",
+      "actividad_principal_2": "tema/experiencia de la planeación 2",
+      "nombre_ronda_2": "canción 2", "link_ronda_2": "...",
+      "modalidad_acompanamiento": "Llamada telefónica"   (opcional),
+      "objetos_paquete": "materiales disponibles en el hogar"   (opcional),
+      "aspectos_fortalecer": "aspectos puntuales a fortalecer"   (opcional)
+    }
     """
     datos = request.get_json(force=True)
-    requeridos = ["nombre", "fecha_nacimiento", "genero",
-                  "tipo_cuaderno", "actividad_principal"]
+
+    tipo = (datos.get("tipo_cuaderno") or "").strip().lower()
+    if tipo not in ("hogar", "llamada"):
+        return jsonify({"error": "tipo_cuaderno debe ser 'hogar' o 'llamada'"}), 400
+
+    requeridos = ["nombre", "tipo_cuaderno", "actividad_principal"]
+    if tipo == "llamada":
+        requeridos += ["tipo_participante", "actividad_principal_2"]
     faltantes = [c for c in requeridos if not datos.get(c)]
     if faltantes:
         return jsonify({"error": f"faltan campos: {', '.join(faltantes)}"}), 400
 
-    tipo = datos["tipo_cuaderno"].strip().lower()
-    if tipo not in ("hogar", "llamada"):
-        return jsonify({"error": "tipo_cuaderno debe ser 'hogar' o 'llamada'"}), 400
+    tipo_participante = (datos.get("tipo_participante") or "").strip().lower()
+    if tipo == "llamada" and tipo_participante not in ("nino", "nina", "bebe", "gestante"):
+        return jsonify({"error": "tipo_participante debe ser 'nino', 'nina', "
+                                  "'bebe' o 'gestante'"}), 400
 
-    try:
-        nacimiento = datetime.strptime(datos["fecha_nacimiento"], "%Y-%m-%d").date()
-    except ValueError:
-        return jsonify({"error": "fecha_nacimiento inválida, use AAAA-MM-DD"}), 400
+    es_gestante = tipo_participante == "gestante"
+    if not es_gestante and (not datos.get("fecha_nacimiento") or not datos.get("genero")):
+        return jsonify({"error": "faltan campos: fecha_nacimiento, genero "
+                                  "(requeridos salvo mujer gestante)"}), 400
 
-    meses = edades.edad_en_meses(nacimiento)
-    banda = edades.banda_por_edad(meses)
+    genero = datos.get("genero", "M")
+
+    if es_gestante:
+        nacimiento = None
+        banda_clave, banda_etiqueta = "gestante", "Mujer gestante"
+        fecha_encuentro = datetime.now().date()
+    else:
+        try:
+            nacimiento = datetime.strptime(datos["fecha_nacimiento"], "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"error": "fecha_nacimiento inválida, use AAAA-MM-DD"}), 400
+        meses = edades.edad_en_meses(nacimiento)
+        banda = edades.banda_por_edad(meses)
+        banda_clave, banda_etiqueta = banda["clave"], banda["etiqueta"]
+        fecha_encuentro = nacimiento
 
     # Genera todos los textos de planeación con la API de Claude (en paralelo)
-    textos = redactor.generar_textos_planeacion(
-        tipo=tipo,
-        actividad=datos["actividad_principal"],
-        nombre_nino=datos["nombre"],
-        banda_clave=banda["clave"],
-        banda_etiqueta=banda["etiqueta"],
-        nombre_ronda=datos.get("nombre_ronda", ""),
-        link_ronda=datos.get("link_ronda", ""),
-    )
+    if tipo == "hogar":
+        textos = redactor.generar_textos_planeacion(
+            actividad=datos["actividad_principal"],
+            nombre_nino=datos["nombre"],
+            banda_clave=banda_clave,
+            banda_etiqueta=banda_etiqueta,
+            nombre_ronda=datos.get("nombre_ronda", ""),
+            link_ronda=datos.get("link_ronda", ""),
+        )
+    else:
+        textos = redactor.generar_textos_planeacion_llamada(
+            tema_1=datos["actividad_principal"],
+            tema_2=datos["actividad_principal_2"],
+            nombre_participante=datos["nombre"],
+            tipo_participante=tipo_participante,
+            genero=genero,
+            banda_clave=banda_clave,
+            banda_etiqueta=banda_etiqueta,
+            nombre_cancion_1=datos.get("nombre_ronda", ""),
+            link_cancion_1=datos.get("link_ronda", ""),
+            nombre_cancion_2=datos.get("nombre_ronda_2", ""),
+            link_cancion_2=datos.get("link_ronda_2", ""),
+            modalidad_acompanamiento=datos.get("modalidad_acompanamiento", "Llamada telefónica"),
+            materiales_disponibles=datos.get("objetos_paquete", ""),
+            aspectos_fortalecer=datos.get("aspectos_fortalecer", ""),
+        )
 
     # Abre el molde y llena las diapositivas de planeación
     molde_path = os.path.join(TEMPLATE_DIR, f"molde_{tipo}.pptx")
@@ -455,15 +532,21 @@ def crear_planeacion():
     # Guarda el registro en la BD con estado 'pendiente_voces'
     planeacion_id = db.guardar_planeacion({
         "nombre_nino": datos["nombre"].strip(),
-        "fecha_encuentro": nacimiento.isoformat(),
-        "genero": datos["genero"],
+        "fecha_encuentro": fecha_encuentro.isoformat(),
+        "genero": genero,
         "tipo_cuaderno": tipo,
-        "banda_clave": banda["clave"],
-        "banda_etiqueta": banda["etiqueta"],
+        "tipo_participante": tipo_participante or None,
+        "banda_clave": banda_clave,
+        "banda_etiqueta": banda_etiqueta,
         "actividad_principal": datos["actividad_principal"],
+        "actividad_principal_2": datos.get("actividad_principal_2", ""),
         "nombre_ronda": datos.get("nombre_ronda", ""),
         "link_ronda": datos.get("link_ronda", ""),
+        "nombre_ronda_2": datos.get("nombre_ronda_2", ""),
+        "link_ronda_2": datos.get("link_ronda_2", ""),
+        "modalidad_acompanamiento": datos.get("modalidad_acompanamiento", ""),
         "objetos_paquete": datos.get("objetos_paquete", ""),
+        "aspectos_fortalecer": datos.get("aspectos_fortalecer", ""),
         "textos_generados": textos,
     })
 
@@ -537,11 +620,16 @@ def completar_planeacion(planeacion_id):
     tipo = plan["tipo_cuaderno"]
     banda_clave = plan["banda_clave"]
     banda_etiqueta = plan["banda_etiqueta"]
+    tipo_participante = (plan.get("tipo_participante") or "").strip().lower()
+    es_gestante = tipo == "llamada" and tipo_participante == "gestante"
     textos_plan = plan.get("textos_generados") or {}
 
     # Reconstruye la materia prima para voces usando datos guardados + observaciones
+    actividad_resumen = plan["actividad_principal"]
+    if tipo == "llamada" and plan.get("actividad_principal_2"):
+        actividad_resumen += f" y {plan['actividad_principal_2']}"
     materia_prima = (
-        f"Actividad realizada: {plan['actividad_principal']}\n"
+        f"Actividad realizada: {actividad_resumen}\n"
         f"Lo que observé / lo que pasó: {observaciones}"
     )
 
@@ -580,9 +668,10 @@ def completar_planeacion(planeacion_id):
             "mis recomendaciones para los próximos acompañamientos a distancia"
         )
 
-    preguntas_desarrollo = PREGUNTAS_DESARROLLO_LLAMADA if tipo == "llamada" else []
+    preguntas_desarrollo = (PREGUNTAS_DESARROLLO_LLAMADA
+                            if (tipo == "llamada" and not es_gestante) else [])
     instrucciones_desarrollo = {}
-    if tipo == "llamada":
+    if tipo == "llamada" and not es_gestante:
         primer_nombre = plan["nombre_nino"].strip().split()[0].title()
         instrucciones_desarrollo = {
             preguntas_desarrollo[0]: (
@@ -605,18 +694,21 @@ def completar_planeacion(planeacion_id):
         trabajos.append(("familia", pregunta, dict(
             banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
             instruccion=instrucciones[pregunta], materia_prima=materia_prima,
+            evitar_actividad=(tipo == "llamada"),
         )))
     for pregunta in preguntas_talento:
         trabajos.append(("talento", pregunta, dict(
             banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
             instruccion=instrucciones_talento[pregunta], materia_prima=materia_prima,
             perspectiva="talento_humano", max_palabras=70,
+            evitar_actividad=(tipo == "llamada"),
         )))
     for pregunta in preguntas_desarrollo:
         trabajos.append(("desarrollo", pregunta, dict(
             banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
             instruccion=instrucciones_desarrollo[pregunta], materia_prima=materia_prima,
             perspectiva="desarrollo_infantil", max_palabras=90,
+            evitar_actividad=True,
         )))
 
     mapa_textos, mapa_talento, mapa_desarrollo = {}, {}, {}
@@ -652,7 +744,7 @@ def completar_planeacion(planeacion_id):
     slide_talento = prs.slides[SLIDE_TALENTO[tipo]]
     plantilla_pptx.llenar_respuestas(slide_talento, mapa_talento, size=9)
 
-    if tipo == "llamada" and tipo in SLIDE_DESARROLLO:
+    if tipo == "llamada" and tipo in SLIDE_DESARROLLO and not es_gestante:
         slide_desarrollo = prs.slides[SLIDE_DESARROLLO[tipo]]
         plantilla_pptx.llenar_respuestas(slide_desarrollo, mapa_desarrollo, size=11)
 

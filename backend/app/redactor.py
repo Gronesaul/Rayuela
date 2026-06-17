@@ -3,6 +3,7 @@ Rayuela - capa de redaccion asistida (API de Claude).
 """
 
 import os
+import re
 import concurrent.futures
 from anthropic import Anthropic
 
@@ -50,7 +51,32 @@ VOCABULARIO_POR_BANDA = {
         "lenguaje y narracion, normas y convivencia, seguimiento de instrucciones, "
         "creatividad, juego simbolico, relacion con pares y familia."
     ),
+    "gestante": (
+        "vinculo afectivo prenatal, lenguaje calido dirigido al bebe en gestacion, "
+        "bienestar emocional y fisico de la madre, participacion activa de la familia "
+        "en el acompanamiento, fortalecimiento del vinculo materno-filial antes del "
+        "nacimiento, preparacion para la llegada del bebe."
+    ),
 }
+
+
+def _reemplazar_actividad(texto):
+    """
+    Filtro de seguridad: en los documentos de llamada la palabra 'actividad'
+    (o 'actividades') no debe aparecer nunca - se reemplaza por 'experiencia'
+    o 'experiencias', preservando mayusculas/minusculas del original.
+    """
+    def _reemplazo(m):
+        original = m.group(0)
+        es_plural = original.lower().endswith("des")
+        nueva = "experiencias" if es_plural else "experiencia"
+        if original.isupper():
+            return nueva.upper()
+        if original[0].isupper():
+            return nueva.capitalize()
+        return nueva
+
+    return re.sub(r"\bactividad(es)?\b", _reemplazo, texto, flags=re.IGNORECASE)
 
 
 def _prompt_sistema(banda_clave, banda_etiqueta, perspectiva="familia"):
@@ -60,7 +86,7 @@ def _prompt_sistema(banda_clave, banda_etiqueta, perspectiva="familia"):
             "agente educativa, dando su analisis y reflexion PROFESIONAL sobre el encuentro "
             "o acompanamiento - en primera persona singular ('considero', 'observe', "
             "'para el proximo encuentro recomendaria...'). Es un texto analitico y reflexivo, "
-            "de quien diseno y acompano la actividad, NO la opinion de la familia. "
+            "de quien diseno y acompano la experiencia, NO la opinion de la familia. "
             "Evita formulas de primera persona plural familiar como 'como familia, nos gusto...'."
         )
     elif perspectiva == "planeacion":
@@ -71,7 +97,9 @@ def _prompt_sistema(banda_clave, banda_etiqueta, perspectiva="familia"):
             "a la familia', 'la agente educativa presentara'), describiendo lo que ocurrira "
             "durante el encuentro planificado. "
             "Usa el estilo formal y pedagogico del ICBF, calido pero profesional. "
-            "NO uses primera persona. NO describas algo en pasado."
+            "NO uses primera persona. NO describas algo en pasado. "
+            "PROHIBIDO usar la palabra 'actividad' o 'actividades' en cualquier forma - "
+            "usa siempre 'experiencia' o 'experiencia pedagogica' en su lugar."
         )
     elif perspectiva == "desarrollo_infantil":
         bloque_voz = (
@@ -87,7 +115,9 @@ def _prompt_sistema(banda_clave, banda_etiqueta, perspectiva="familia"):
         bloque_voz = (
             "Escribes en la voz de la familia, en primera persona plural "
             "('nosotros como familia'), relatando su experiencia del encuentro o "
-            "acompanamiento.\n\nEstilo de referencia:\n" + formulas
+            "acompanamiento. Que se sienta como una sola voz natural, sencilla y calida, "
+            "sin sonar repetitiva ni formal en exceso.\n\n"
+            "Estilo de referencia:\n" + formulas
         )
 
     return (
@@ -96,7 +126,7 @@ def _prompt_sistema(banda_clave, banda_etiqueta, perspectiva="familia"):
         "Tu unica tarea es REDACTAR Y AMPLIAR en el formato y tono del ICBF lo que ella "
         "te entrega en bruto. NO inventes actividades, materiales ni observaciones que ella "
         "no haya mencionado - solo dales forma narrativa profesional y calida.\n\n"
-        "El nino/nina de este registro esta en la banda de desarrollo: " + banda_etiqueta + ".\n"
+        "El participante de este registro esta en la banda: " + banda_etiqueta + ".\n"
         "Vocabulario y enfoque apropiados para esta banda: " + VOCABULARIO_POR_BANDA[banda_clave] + "\n\n"
         + bloque_voz + "\n\n"
         "Reglas estrictas:\n"
@@ -107,7 +137,7 @@ def _prompt_sistema(banda_clave, banda_etiqueta, perspectiva="familia"):
 
 
 def redactar(banda_clave, banda_etiqueta, instruccion, materia_prima,
-             perspectiva="familia", max_palabras=110):
+             perspectiva="familia", max_palabras=110, evitar_actividad=False):
     """Llama a Claude para redactar un bloque de texto del cuaderno ICBF."""
     client = _get_client()
     texto_usuario = (
@@ -126,11 +156,14 @@ def redactar(banda_clave, banda_etiqueta, instruccion, materia_prima,
         system=_prompt_sistema(banda_clave, banda_etiqueta, perspectiva),
         messages=[{"role": "user", "content": texto_usuario}],
     )
-    return "".join(block.text for block in msg.content if block.type == "text").strip()
+    texto = "".join(block.text for block in msg.content if block.type == "text").strip()
+    if evitar_actividad:
+        texto = _reemplazar_actividad(texto)
+    return texto
 
 
 # -----------------------------------------------------------------------------
-# MODULO DE PLANEACION
+# MODULO DE PLANEACION - ENCUENTRO EN EL HOGAR
 # -----------------------------------------------------------------------------
 
 _GUIA_MOMENTO_UNO = (
@@ -156,13 +189,14 @@ _GUIA_MOMENTO_TRES = (
 )
 
 
-def generar_textos_planeacion(tipo, actividad, nombre_nino, banda_clave,
+def generar_textos_planeacion(actividad, nombre_nino, banda_clave,
                                banda_etiqueta, nombre_ronda="", link_ronda=""):
     """
-    Genera en paralelo todos los textos del documento de planeacion.
+    Genera en paralelo los textos del documento de planeacion para 'hogar':
+    intencionalidad, experiencias_momento_uno/dos/tres.
 
-    Para 'hogar': intencionalidad, experiencias_momento_uno/dos/tres
-    Para 'llamada': intencionalidad, descripcion_experiencia, tiempo_recursos
+    (El modulo de 'llamada' usa generar_textos_planeacion_llamada, mas abajo,
+    porque su estructura - dos planeaciones independientes - es distinta.)
     """
     primer_nombre = nombre_nino.strip().split()[0].title()
     info_base = (
@@ -170,84 +204,46 @@ def generar_textos_planeacion(tipo, actividad, nombre_nino, banda_clave,
         "Participante: " + primer_nombre + " (banda de edad: " + banda_etiqueta + ")"
     )
 
-    if tipo == "hogar":
-        info_m1 = info_base
-        if nombre_ronda:
-            info_m1 += "\nRonda infantil: " + nombre_ronda
-        if link_ronda:
-            info_m1 += "\nEnlace de la ronda: " + link_ronda
+    info_m1 = info_base
+    if nombre_ronda:
+        info_m1 += "\nRonda infantil: " + nombre_ronda
+    if link_ronda:
+        info_m1 += "\nEnlace de la ronda: " + link_ronda
 
-        trabajos = [
-            ("intencionalidad", dict(
-                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
-                instruccion=(
-                    "la intencionalidad pedagogica de este encuentro: que habilidades, "
-                    "capacidades, vinculos o aprendizajes se busca fortalecer con esta "
-                    "actividad. Maximo 2 oraciones concisas."
-                ),
-                materia_prima=info_base,
-                perspectiva="planeacion",
-                max_palabras=50,
-            )),
-            ("experiencias_momento_uno", dict(
-                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
-                instruccion="el texto del 'Momento uno: conectarnos'. Debe incluir: " + _GUIA_MOMENTO_UNO,
-                materia_prima=info_m1,
-                perspectiva="planeacion",
-                max_palabras=110,
-            )),
-            ("experiencias_momento_dos", dict(
-                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
-                instruccion="el texto del 'Momento dos: construyendo juntos'. Debe incluir: " + _GUIA_MOMENTO_DOS,
-                materia_prima=info_base,
-                perspectiva="planeacion",
-                max_palabras=120,
-            )),
-            ("experiencias_momento_tres", dict(
-                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
-                instruccion="el texto del 'Momento tres: comprometernos'. Debe incluir: " + _GUIA_MOMENTO_TRES,
-                materia_prima=info_base,
-                perspectiva="planeacion",
-                max_palabras=100,
-            )),
-        ]
-
-    else:  # llamada
-        trabajos = [
-            ("intencionalidad", dict(
-                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
-                instruccion=(
-                    "la intencionalidad pedagogica del acompanamiento a distancia: "
-                    "que habilidades o aprendizajes se busca fortalecer. Maximo 2 oraciones."
-                ),
-                materia_prima=info_base,
-                perspectiva="planeacion",
-                max_palabras=50,
-            )),
-            ("descripcion_experiencia", dict(
-                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
-                instruccion=(
-                    "la descripcion de la experiencia pedagogica a promover con la familia "
-                    "en el acompanamiento a distancia: como se desarrollara la actividad, "
-                    "que hara la familia, que explorara el/la nino/a/bebe, "
-                    "y como participara cada integrante."
-                ),
-                materia_prima=info_base,
-                perspectiva="planeacion",
-                max_palabras=130,
-            )),
-            ("tiempo_recursos", dict(
-                banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
-                instruccion=(
-                    "el tiempo estimado y los recursos necesarios para esta actividad: "
-                    "duracion aproximada de cada momento y materiales o herramientas "
-                    "que necesita la familia."
-                ),
-                materia_prima=info_base,
-                perspectiva="planeacion",
-                max_palabras=70,
-            )),
-        ]
+    trabajos = [
+        ("intencionalidad", dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion=(
+                "la intencionalidad pedagogica de este encuentro: que habilidades, "
+                "capacidades, vinculos o aprendizajes se busca fortalecer con esta "
+                "actividad. Maximo 2 oraciones concisas."
+            ),
+            materia_prima=info_base,
+            perspectiva="planeacion",
+            max_palabras=50,
+        )),
+        ("experiencias_momento_uno", dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion="el texto del 'Momento uno: conectarnos'. Debe incluir: " + _GUIA_MOMENTO_UNO,
+            materia_prima=info_m1,
+            perspectiva="planeacion",
+            max_palabras=110,
+        )),
+        ("experiencias_momento_dos", dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion="el texto del 'Momento dos: construyendo juntos'. Debe incluir: " + _GUIA_MOMENTO_DOS,
+            materia_prima=info_base,
+            perspectiva="planeacion",
+            max_palabras=120,
+        )),
+        ("experiencias_momento_tres", dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion="el texto del 'Momento tres: comprometernos'. Debe incluir: " + _GUIA_MOMENTO_TRES,
+            materia_prima=info_base,
+            perspectiva="planeacion",
+            max_palabras=100,
+        )),
+    ]
 
     resultados = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(trabajos)) as fondo:
@@ -258,5 +254,145 @@ def generar_textos_planeacion(tipo, actividad, nombre_nino, banda_clave,
         for futuro in concurrent.futures.as_completed(futuros):
             clave = futuros[futuro]
             resultados[clave] = futuro.result()
+
+    return resultados
+
+
+# -----------------------------------------------------------------------------
+# MODULO DE PLANEACION - ACOMPANAMIENTO POR LLAMADA (dos planeaciones)
+# -----------------------------------------------------------------------------
+
+_TEXTO_INTRO_TIEMPO_RECURSOS = (
+    "Tiempo estimado: 10 minutos.\nRecursos: Talento humano, Familia, Telefono."
+)
+
+
+def _etiqueta_participante(tipo_participante, genero):
+    """Devuelve como nombrar al participante en los textos fijos/prompts."""
+    if tipo_participante == "gestante":
+        return "la mujer gestante"
+    if tipo_participante == "bebe":
+        return "la bebe" if genero == "F" else "el bebe"
+    if tipo_participante == "nina":
+        return "la nina"
+    return "el nino"
+
+
+def _texto_intro_familia(nombre_cancion, link_cancion, etiqueta_participante):
+    """
+    Texto FIJO (sin IA) de la 'Experiencia pedagogica a promover con la familia':
+    solo varian el nombre de la cancion, el enlace y el tipo de participante.
+    """
+    nombre_cancion = (nombre_cancion or "").strip()
+    link_cancion = (link_cancion or "").strip()
+    if nombre_cancion:
+        cancion_txt = "la cancion \"" + nombre_cancion + "\""
+        if link_cancion:
+            cancion_txt += " (disponible en: " + link_cancion + ")"
+    else:
+        cancion_txt = "una cancion infantil"
+
+    return (
+        "Se inicia el acompanamiento telefonico con un saludo afectuoso a la familia, "
+        "propiciando un ambiente de confianza y disposicion para participar. Se invita "
+        "a la familia a escuchar y disfrutar junto a " + etiqueta_participante + " "
+        + cancion_txt + ", favoreciendo un momento de conexion, alegria y vinculo "
+        "afectivo antes de iniciar la experiencia pedagogica principal."
+    )
+
+
+def generar_textos_planeacion_llamada(
+    tema_1, tema_2, nombre_participante, tipo_participante, genero,
+    banda_clave, banda_etiqueta,
+    nombre_cancion_1="", link_cancion_1="", nombre_cancion_2="", link_cancion_2="",
+    modalidad_acompanamiento="Llamada telefonica",
+    materiales_disponibles="", aspectos_fortalecer="",
+):
+    """
+    Genera los textos de las DOS planeaciones del acompanamiento por llamada.
+
+    Cada planeacion (1 y 2) tiene su propia:
+      - intencionalidad (un solo verbo principal, minimo tres lineas)
+      - experiencia pedagogica principal: descripcion + tiempo y recursos
+
+    La 'experiencia pedagogica a promover con la familia' (el saludo + cancion
+    inicial) es texto FIJO, generado por plantilla en Python (no llama a la IA),
+    para que solo varien el nombre de la cancion, el enlace y el participante.
+    """
+    primer_nombre = nombre_participante.strip().split()[0].title() if nombre_participante.strip() else ""
+    etiqueta = _etiqueta_participante(tipo_participante, genero)
+
+    info_extra = "\nModalidad de acompanamiento: " + modalidad_acompanamiento
+    if materiales_disponibles.strip():
+        info_extra += "\nMateriales disponibles en el hogar: " + materiales_disponibles.strip()
+    if aspectos_fortalecer.strip():
+        info_extra += "\nAspectos especificos a fortalecer: " + aspectos_fortalecer.strip()
+
+    def _info(tema):
+        base = "Tema o experiencia priorizada: " + tema + "\nParticipante: " + (primer_nombre or etiqueta)
+        if tipo_participante == "gestante":
+            base += " (mujer gestante)"
+        else:
+            base += " (banda de desarrollo: " + banda_etiqueta + ")"
+        return base + info_extra
+
+    trabajos = []
+    for n, tema in [("1", tema_1), ("2", tema_2)]:
+        trabajos.append(("intencionalidad_" + n, dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion=(
+                "la intencionalidad pedagogica de esta experiencia del acompanamiento "
+                "telefonico. Debe ser UNA SOLA ORACION construida alrededor de UN UNICO "
+                "VERBO PRINCIPAL (no enumeres varias acciones con verbos distintos); "
+                "extiendela con complementos, conectores y clausulas explicativas para "
+                "que sea una oracion completa y desarrollada, de minimo tres lineas de "
+                "extension en una caja de texto pequena (no la fragmentes en varias "
+                "oraciones cortas)."
+            ),
+            materia_prima=_info(tema),
+            perspectiva="planeacion",
+            max_palabras=55,
+            evitar_actividad=True,
+        )))
+        trabajos.append(("experiencia_principal_descripcion_" + n, dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion=(
+                "la descripcion completa de la EXPERIENCIA PEDAGOGICA PRINCIPAL de este "
+                "acompanamiento telefonico: como se desarrolla paso a paso, que orienta "
+                "la agente educativa por telefono, que hace la familia, y que explora o "
+                "vivencia " + etiqueta + "."
+            ),
+            materia_prima=_info(tema),
+            perspectiva="planeacion",
+            max_palabras=140,
+            evitar_actividad=True,
+        )))
+        trabajos.append(("experiencia_principal_tiempo_recursos_" + n, dict(
+            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
+            instruccion=(
+                "el tiempo estimado y los recursos necesarios para la experiencia "
+                "pedagogica PRINCIPAL (no la experiencia introductoria de la cancion, "
+                "sino la principal): duracion aproximada y materiales u objetos que "
+                "necesita la familia en casa."
+            ),
+            materia_prima=_info(tema),
+            perspectiva="planeacion",
+            max_palabras=60,
+            evitar_actividad=True,
+        )))
+
+    resultados = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(trabajos)) as fondo:
+        futuros = {
+            fondo.submit(redactar, **kwargs): clave
+            for clave, kwargs in trabajos
+        }
+        for futuro in concurrent.futures.as_completed(futuros):
+            clave = futuros[futuro]
+            resultados[clave] = futuro.result()
+
+    resultados["intro_descripcion_1"] = _texto_intro_familia(nombre_cancion_1, link_cancion_1, etiqueta)
+    resultados["intro_descripcion_2"] = _texto_intro_familia(nombre_cancion_2, link_cancion_2, etiqueta)
+    resultados["intro_tiempo_recursos"] = _TEXTO_INTRO_TIEMPO_RECURSOS
 
     return resultados

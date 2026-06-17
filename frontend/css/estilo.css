@@ -209,6 +209,10 @@ button:disabled { background: #cbb89a; cursor: wait; }
 .campos-hogar { transition: opacity .2s; }
 .campos-hogar.oculto { display: none; }
 
+/* ── Genérico: ocultar cualquier bloque condicional ──── */
+.campos-llamada { transition: opacity .2s; }
+.oculto { display: none; }
+
 /* ── Contenedor de página completa (sin sidebar) ───── */
 .contenedor-simple {
   max-width: 680px;

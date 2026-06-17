@@ -20,29 +20,7 @@
 
   <main class="contenedor-simple">
     <form id="formulario-planeacion" class="tarjeta">
-      <h2>1. ¿De qué niño o niña es el encuentro?</h2>
-
-      <label for="nombre">Nombre completo</label>
-      <input type="text" id="nombre" name="nombre" required
-             placeholder="Ej: Hassan Melo Hueso">
-
-      <div class="fila">
-        <div class="campo">
-          <label for="fecha_nacimiento">Fecha de nacimiento</label>
-          <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" required>
-        </div>
-        <div class="campo">
-          <label for="genero">Sexo</label>
-          <select id="genero" name="genero" required>
-            <option value="M">Niño</option>
-            <option value="F">Niña</option>
-          </select>
-        </div>
-      </div>
-
-      <p id="banda-info" class="ayuda" aria-live="polite"></p>
-
-      <h2>2. ¿Qué tipo de cuaderno es?</h2>
+      <h2>1. ¿Qué tipo de cuaderno es?</h2>
       <div class="fila opciones">
         <label class="opcion">
           <input type="radio" name="tipo_cuaderno" value="hogar" checked>
@@ -54,23 +32,98 @@
         </label>
       </div>
 
-      <h2>3. ¿Qué vas a hacer?</h2>
+      <h2>2. ¿De quién es el encuentro?</h2>
 
-      <label for="actividad_principal">Actividad principal del encuentro</label>
-      <input type="text" id="actividad_principal" name="actividad_principal" required
-             placeholder="Ej: exploración sensorial con texturas naturales (telas, semillas)">
+      <label for="nombre">Nombre completo</label>
+      <input type="text" id="nombre" name="nombre" required
+             placeholder="Ej: Hassan Melo Hueso">
 
+      <div id="campo-tipo-participante" class="oculto">
+        <label for="tipo_participante">Tipo de participante</label>
+        <select id="tipo_participante" name="tipo_participante">
+          <option value="nino">Niño</option>
+          <option value="nina">Niña</option>
+          <option value="bebe">Bebé</option>
+          <option value="gestante">Mujer gestante</option>
+        </select>
+      </div>
+
+      <div class="fila" id="fila-edad">
+        <div class="campo">
+          <label for="fecha_nacimiento">Fecha de nacimiento</label>
+          <input type="date" id="fecha_nacimiento" name="fecha_nacimiento">
+        </div>
+        <div class="campo">
+          <label for="genero">Sexo</label>
+          <select id="genero" name="genero">
+            <option value="M">Niño</option>
+            <option value="F">Niña</option>
+          </select>
+        </div>
+      </div>
+
+      <p id="banda-info" class="ayuda" aria-live="polite"></p>
+
+      <!-- HOGAR: una sola experiencia -->
       <div class="campos-hogar" id="campos-hogar">
-        <label for="nombre_ronda">Nombre de la ronda infantil <span style="font-weight:400">(opcional)</span></label>
+        <h2>3. ¿Qué vas a hacer?</h2>
+
+        <label for="actividad_principal">Experiencia pedagógica del encuentro</label>
+        <input type="text" id="actividad_principal" name="actividad_principal"
+               placeholder="Ej: exploración sensorial con texturas naturales (telas, semillas)">
+
+        <label for="nombre_ronda">Nombre de la canción/ronda <span style="font-weight:400">(opcional)</span></label>
         <input type="text" id="nombre_ronda" name="nombre_ronda"
                placeholder="Ej: Los pollitos dicen">
 
-        <label for="link_ronda">Enlace de la ronda <span style="font-weight:400">(opcional)</span></label>
+        <label for="link_ronda">Enlace de la canción/ronda <span style="font-weight:400">(opcional)</span></label>
         <input type="url" id="link_ronda" name="link_ronda"
                placeholder="https://youtube.com/...">
       </div>
 
-      <label for="objetos_paquete">Objetos del paquete didáctico <span style="font-weight:400">(opcional)</span></label>
+      <!-- LLAMADA: dos planeaciones independientes -->
+      <div class="campos-llamada oculto" id="campos-llamada">
+        <h2>3. Planeación 1</h2>
+
+        <label for="actividad_principal_llamada">Tema o práctica priorizada 1</label>
+        <input type="text" id="actividad_principal_llamada" name="actividad_principal_llamada"
+               placeholder="Ej: reconocimiento de partes del cuerpo">
+
+        <label for="nombre_ronda_llamada">Nombre de la canción 1</label>
+        <input type="text" id="nombre_ronda_llamada" name="nombre_ronda_llamada"
+               placeholder="Ej: Cabeza, hombros, rodillas y pies">
+
+        <label for="link_ronda_llamada">Enlace de la canción 1</label>
+        <input type="url" id="link_ronda_llamada" name="link_ronda_llamada"
+               placeholder="https://youtube.com/...">
+
+        <h2>4. Planeación 2</h2>
+
+        <label for="actividad_principal_2">Tema o práctica priorizada 2</label>
+        <input type="text" id="actividad_principal_2" name="actividad_principal_2"
+               placeholder="Ej: clasificación de objetos por color">
+
+        <label for="nombre_ronda_2">Nombre de la canción 2</label>
+        <input type="text" id="nombre_ronda_2" name="nombre_ronda_2"
+               placeholder="Ej: Los colores">
+
+        <label for="link_ronda_2">Enlace de la canción 2</label>
+        <input type="url" id="link_ronda_2" name="link_ronda_2"
+               placeholder="https://youtube.com/...">
+
+        <h2>5. Detalles del acompañamiento</h2>
+
+        <label for="modalidad_acompanamiento">Modalidad de acompañamiento</label>
+        <input type="text" id="modalidad_acompanamiento" name="modalidad_acompanamiento"
+               value="Llamada telefónica"
+               placeholder="Ej: Llamada telefónica, videollamada...">
+
+        <label for="aspectos_fortalecer">Aspectos a fortalecer <span style="font-weight:400">(opcional)</span></label>
+        <input type="text" id="aspectos_fortalecer" name="aspectos_fortalecer"
+               placeholder="Ej: lenguaje expresivo, motricidad fina">
+      </div>
+
+      <label for="objetos_paquete">Materiales disponibles en el hogar <span style="font-weight:400">(opcional)</span></label>
       <input type="text" id="objetos_paquete" name="objetos_paquete"
              placeholder="Ej: telas de diferentes texturas, semillas, recipientes">
 

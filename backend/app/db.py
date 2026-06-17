@@ -59,6 +59,12 @@ def init():
                 ("banda_clave", "TEXT"),
                 ("banda_etiqueta", "TEXT"),
                 ("textos_generados", "JSONB"),
+                ("tipo_participante", "TEXT"),
+                ("actividad_principal_2", "TEXT"),
+                ("nombre_ronda_2", "TEXT"),
+                ("link_ronda_2", "TEXT"),
+                ("modalidad_acompanamiento", "TEXT"),
+                ("aspectos_fortalecer", "TEXT"),
             ]:
                 cur.execute(
                     f"ALTER TABLE planeaciones "
@@ -75,8 +81,18 @@ def guardar_planeacion(datos):
       nombre_nino, fecha_encuentro, genero, tipo_cuaderno,
       banda_clave, banda_etiqueta, actividad_principal,
       nombre_ronda, link_ronda, objetos_paquete, textos_generados (dict).
+
+    Campos opcionales (solo se usan en "llamada"; se autocompletan si
+    el llamador -el flujo de "hogar"- no los envía):
+      tipo_participante, actividad_principal_2, nombre_ronda_2,
+      link_ronda_2, modalidad_acompanamiento, aspectos_fortalecer.
     """
     datos_db = dict(datos)
+    for campo in ("tipo_participante", "actividad_principal_2",
+                  "nombre_ronda_2", "link_ronda_2",
+                  "modalidad_acompanamiento", "aspectos_fortalecer"):
+        datos_db.setdefault(campo, None)
+
     # psycopg2 no serializa dicts a JSONB automáticamente
     if isinstance(datos_db.get("textos_generados"), dict):
         datos_db["textos_generados"] = json.dumps(
@@ -88,14 +104,19 @@ def guardar_planeacion(datos):
             cur.execute("""
                 INSERT INTO planeaciones
                     (nombre_nino, fecha_encuentro, genero, tipo_cuaderno,
-                     banda_clave, banda_etiqueta, actividad_principal,
-                     nombre_ronda, link_ronda, objetos_paquete,
-                     textos_generados)
+                     tipo_participante, banda_clave, banda_etiqueta,
+                     actividad_principal, actividad_principal_2,
+                     nombre_ronda, link_ronda, nombre_ronda_2, link_ronda_2,
+                     modalidad_acompanamiento, objetos_paquete,
+                     aspectos_fortalecer, textos_generados)
                 VALUES
                     (%(nombre_nino)s, %(fecha_encuentro)s, %(genero)s,
-                     %(tipo_cuaderno)s, %(banda_clave)s, %(banda_etiqueta)s,
-                     %(actividad_principal)s, %(nombre_ronda)s,
-                     %(link_ronda)s, %(objetos_paquete)s,
+                     %(tipo_cuaderno)s, %(tipo_participante)s,
+                     %(banda_clave)s, %(banda_etiqueta)s,
+                     %(actividad_principal)s, %(actividad_principal_2)s,
+                     %(nombre_ronda)s, %(link_ronda)s, %(nombre_ronda_2)s,
+                     %(link_ronda_2)s, %(modalidad_acompanamiento)s,
+                     %(objetos_paquete)s, %(aspectos_fortalecer)s,
                      %(textos_generados)s)
                 RETURNING id
             """, datos_db)
