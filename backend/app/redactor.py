@@ -301,6 +301,70 @@ def _texto_intro_familia(nombre_cancion, link_cancion, etiqueta_participante):
     )
 
 
+def _dividir_materiales(texto):
+    """Convierte el texto libre de materiales (p. ej. 'peluches, telas y semillas')
+    en una lista de items individuales, uno por linea — para el formato breve
+    de 'Tiempo estimado y recursos' que pidio Jimena (ver
+    _texto_tiempo_recursos_principal)."""
+    texto = (texto or "").strip()
+    if not texto:
+        return []
+    partes = re.split(r",|;|/|\by\b", texto)
+    return [p.strip().capitalize() for p in partes if p.strip()]
+
+
+def _estimar_minutos(tema, banda_etiqueta):
+    """Le pide a la IA UNICAMENTE un numero de minutos (nada de redaccion),
+    para el campo breve 'Tiempo estimado y recursos' de la experiencia
+    pedagogica principal (ver _texto_tiempo_recursos_principal). Si la
+    respuesta no trae un numero reconocible, o falla la llamada, usa 15
+    minutos por defecto."""
+    try:
+        client = _get_client()
+        msg = client.messages.create(
+            model=MODEL,
+            max_tokens=10,
+            system=(
+                "Respondes UNICAMENTE con un numero entero de minutos (sin la "
+                "palabra 'minutos', sin texto adicional, sin explicacion) que "
+                "consideres razonable para desarrollar la siguiente experiencia "
+                "pedagogica con un participante en banda de desarrollo: "
+                + banda_etiqueta + "."
+            ),
+            messages=[{"role": "user", "content": "Experiencia: " + tema}],
+        )
+        texto = "".join(b.text for b in msg.content if b.type == "text").strip()
+        numero = re.search(r"\d+", texto)
+        return numero.group(0) if numero else "15"
+    except Exception:
+        return "15"
+
+
+def _texto_tiempo_recursos_principal(minutos, materiales):
+    """
+    Formato breve, tipo lista (no parrafo), para 'Tiempo estimado y recursos'
+    de la experiencia pedagogica PRINCIPAL.
+
+    Jimena reporto que este campo, cuando la IA lo redactaba como parrafo,
+    "detalla mucho": ella solo necesita algo como
+
+        Talento humano
+        15 minutos
+        Aros
+        Pelotas
+
+    y que mencione los materiales REALMENTE usados en esa experiencia (no que
+    la IA los resuma, omita o invente). Por eso este campo ya NO lo redacta la
+    IA en texto libre: se construye en Python a partir de los materiales que
+    Jimena registro para esta experiencia especifica (ver materiales_por_n en
+    generar_textos_planeacion_llamada). La IA solo decide el numero de
+    minutos (ver _estimar_minutos) — nunca la redaccion ni la lista.
+    """
+    lineas = ["Talento humano", str(minutos) + " minutos"]
+    lineas.extend(_dividir_materiales(materiales))
+    return "\n".join(lineas)
+
+
 def generar_textos_planeacion_llamada(
     tema_1, tema_2, nombre_participante, tipo_participante, genero,
     banda_clave, banda_etiqueta,
@@ -329,6 +393,14 @@ def generar_textos_planeacion_llamada(
     planeacion recibe SOLO su propia lista de materiales, y si esta vacia se
     le dice explicitamente a la IA que no invente ni mencione materiales para
     esa experiencia en particular.
+
+    IMPORTANTE sobre 'Tiempo estimado y recursos' de la experiencia PRINCIPAL:
+    Jimena tambien reporto que este campo, redactado por la IA como parrafo,
+    quedaba demasiado detallado para lo que necesita (ver
+    _texto_tiempo_recursos_principal). Por eso ya NO se redacta como texto
+    libre: se arma como una lista breve (Talento humano / minutos /
+    materiales) usando los materiales reales de esa experiencia y un numero
+    de minutos que la IA solo estima, sin redactar nada mas.
     """
     primer_nombre = nombre_participante.strip().split()[0].title() if nombre_participante.strip() else ""
     etiqueta = _etiqueta_participante(tipo_participante, genero)
@@ -385,29 +457,29 @@ def generar_textos_planeacion_llamada(
             max_palabras=140,
             evitar_actividad=True,
         )))
-        trabajos.append(("experiencia_principal_tiempo_recursos_" + n, dict(
-            banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
-            instruccion=(
-                "el tiempo estimado y los recursos necesarios para la experiencia "
-                "pedagogica PRINCIPAL (no la experiencia introductoria de la cancion, "
-                "sino la principal): duracion aproximada y materiales u objetos que "
-                "necesita la familia en casa."
-            ),
-            materia_prima=_info(tema, n),
-            perspectiva="planeacion",
-            max_palabras=60,
-            evitar_actividad=True,
-        )))
 
     resultados = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(trabajos)) as fondo:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(trabajos) + 2) as fondo:
         futuros = {
             fondo.submit(redactar, **kwargs): clave
             for clave, kwargs in trabajos
         }
+        futuros_minutos = {
+            fondo.submit(_estimar_minutos, tema, banda_etiqueta): n
+            for n, tema in [("1", tema_1), ("2", tema_2)]
+        }
         for futuro in concurrent.futures.as_completed(futuros):
             clave = futuros[futuro]
             resultados[clave] = futuro.result()
+        minutos_por_n = {}
+        for futuro in concurrent.futures.as_completed(futuros_minutos):
+            n = futuros_minutos[futuro]
+            minutos_por_n[n] = futuro.result()
+
+    for n in ("1", "2"):
+        resultados["experiencia_principal_tiempo_recursos_" + n] = _texto_tiempo_recursos_principal(
+            minutos_por_n.get(n, "15"), materiales_por_n.get(n, "")
+        )
 
     resultados["intro_descripcion_1"] = _texto_intro_familia(nombre_cancion_1, link_cancion_1, etiqueta)
     resultados["intro_descripcion_2"] = _texto_intro_familia(nombre_cancion_2, link_cancion_2, etiqueta)
