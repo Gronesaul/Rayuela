@@ -368,11 +368,17 @@ def generar_voces():
 # MÓDULO DE PLANEACIÓN
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _llenar_planeacion_en_pptx(prs, tipo, textos, objetos_paquete=""):
+def _llenar_planeacion_en_pptx(prs, tipo, textos, objetos_paquete="", objetos_paquete_2=""):
     """
     Escribe los textos de planeación en las diapositivas correspondientes
     del cuaderno (slides 0-1 para hogar, 0-3 para llamada).
     Usa el mismo motor espacial que voces (find_question / find_answer_table).
+
+    En "llamada", objetos_paquete corresponde a la planeación 1 y
+    objetos_paquete_2 a la planeación 2 — son independientes (antes era un
+    solo valor compartido entre ambas, lo que causaba que la página 4
+    mostrara "no se utilizaron materiales" aunque sí se hubieran usado en
+    la planeación 1, como reportó Jimena).
     """
     if tipo == "hogar":
         # Slide 0: INTENCIONALIDAD + Momento uno (Experiencias)
@@ -398,6 +404,7 @@ def _llenar_planeacion_en_pptx(prs, tipo, textos, objetos_paquete=""):
         # de saludo + canción, igual para ambas salvo la canción).
         # Slide principal (1 y 3): la "Experiencia pedagógica principal",
         # completamente dinámica y propia de cada planeación.
+        objetos_por_n = {"1": objetos_paquete, "2": objetos_paquete_2}
         pares = [(0, 1, "1"), (2, 3, "2")]
         for slide_intro_idx, slide_principal_idx, n in pares:
             slide_intro = prs.slides[slide_intro_idx]
@@ -414,8 +421,9 @@ def _llenar_planeacion_en_pptx(prs, tipo, textos, objetos_paquete=""):
                 "Tiempo estimado y recursos": textos.get(
                     f"experiencia_principal_tiempo_recursos_{n}", ""),
             }
-            if objetos_paquete:
-                mapa_principal["paquete didáctico"] = objetos_paquete
+            objetos_n = objetos_por_n.get(n, "")
+            if objetos_n:
+                mapa_principal["paquete didáctico"] = objetos_n
             plantilla_pptx.llenar_respuestas(slide_principal, mapa_principal, size=11)
 
 
@@ -449,7 +457,8 @@ def crear_planeacion():
       "actividad_principal_2": "tema/experiencia de la planeación 2",
       "nombre_ronda_2": "canción 2", "link_ronda_2": "...",
       "modalidad_acompanamiento": "Llamada telefónica"   (opcional),
-      "objetos_paquete": "materiales disponibles en el hogar"   (opcional),
+      "objetos_paquete": "materiales disponibles para la planeación 1"   (opcional),
+      "objetos_paquete_2": "materiales disponibles para la planeación 2"   (opcional),
       "aspectos_fortalecer": "aspectos puntuales a fortalecer"   (opcional)
     }
     """
@@ -516,7 +525,8 @@ def crear_planeacion():
             nombre_cancion_2=datos.get("nombre_ronda_2", ""),
             link_cancion_2=datos.get("link_ronda_2", ""),
             modalidad_acompanamiento=datos.get("modalidad_acompanamiento", "Llamada telefónica"),
-            materiales_disponibles=datos.get("objetos_paquete", ""),
+            materiales_disponibles_1=datos.get("objetos_paquete", ""),
+            materiales_disponibles_2=datos.get("objetos_paquete_2", ""),
             aspectos_fortalecer=datos.get("aspectos_fortalecer", ""),
         )
 
@@ -527,7 +537,8 @@ def crear_planeacion():
 
     prs = Presentation(molde_path)
     _llenar_planeacion_en_pptx(prs, tipo, textos,
-                                objetos_paquete=datos.get("objetos_paquete", ""))
+                                objetos_paquete=datos.get("objetos_paquete", ""),
+                                objetos_paquete_2=datos.get("objetos_paquete_2", ""))
 
     # Guarda el registro en la BD con estado 'pendiente_voces'
     planeacion_id = db.guardar_planeacion({
@@ -546,6 +557,7 @@ def crear_planeacion():
         "link_ronda_2": datos.get("link_ronda_2", ""),
         "modalidad_acompanamiento": datos.get("modalidad_acompanamiento", ""),
         "objetos_paquete": datos.get("objetos_paquete", ""),
+        "objetos_paquete_2": datos.get("objetos_paquete_2", ""),
         "aspectos_fortalecer": datos.get("aspectos_fortalecer", ""),
         "textos_generados": textos,
     })
@@ -735,7 +747,8 @@ def completar_planeacion(planeacion_id):
 
     # Planeación (reutiliza los textos ya guardados en la BD)
     _llenar_planeacion_en_pptx(prs, tipo, textos_plan,
-                                objetos_paquete=plan.get("objetos_paquete", ""))
+                                objetos_paquete=plan.get("objetos_paquete", ""),
+                                objetos_paquete_2=plan.get("objetos_paquete_2", ""))
 
     # Voces
     slide_familia = prs.slides[SLIDE_FAMILIA[tipo]]

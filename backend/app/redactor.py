@@ -306,7 +306,7 @@ def generar_textos_planeacion_llamada(
     banda_clave, banda_etiqueta,
     nombre_cancion_1="", link_cancion_1="", nombre_cancion_2="", link_cancion_2="",
     modalidad_acompanamiento="Llamada telefonica",
-    materiales_disponibles="", aspectos_fortalecer="",
+    materiales_disponibles_1="", materiales_disponibles_2="", aspectos_fortalecer="",
 ):
     """
     Genera los textos de las DOS planeaciones del acompanamiento por llamada.
@@ -314,27 +314,45 @@ def generar_textos_planeacion_llamada(
     Cada planeacion (1 y 2) tiene su propia:
       - intencionalidad (un solo verbo principal, minimo tres lineas)
       - experiencia pedagogica principal: descripcion + tiempo y recursos
+      - materiales_disponibles (ver mas abajo)
 
     La 'experiencia pedagogica a promover con la familia' (el saludo + cancion
     inicial) es texto FIJO, generado por plantilla en Python (no llama a la IA),
     para que solo varien el nombre de la cancion, el enlace y el participante.
+
+    IMPORTANTE sobre materiales_disponibles_1/2: antes existia un solo
+    parametro "materiales_disponibles" compartido entre las dos planeaciones,
+    y la IA decidia por su cuenta, para cada tema, si lo mencionaba o no.
+    Eso producia inconsistencias como la que reporto Jimena: la pagina 4
+    (planeacion 2) decia "no se utilizaron materiales" cuando en la pagina 1
+    (planeacion 1) si se habian registrado y usado peluches. Ahora cada
+    planeacion recibe SOLO su propia lista de materiales, y si esta vacia se
+    le dice explicitamente a la IA que no invente ni mencione materiales para
+    esa experiencia en particular.
     """
     primer_nombre = nombre_participante.strip().split()[0].title() if nombre_participante.strip() else ""
     etiqueta = _etiqueta_participante(tipo_participante, genero)
 
-    info_extra = "\nModalidad de acompanamiento: " + modalidad_acompanamiento
-    if materiales_disponibles.strip():
-        info_extra += "\nMateriales disponibles en el hogar: " + materiales_disponibles.strip()
+    info_extra_comun = "\nModalidad de acompanamiento: " + modalidad_acompanamiento
     if aspectos_fortalecer.strip():
-        info_extra += "\nAspectos especificos a fortalecer: " + aspectos_fortalecer.strip()
+        info_extra_comun += "\nAspectos especificos a fortalecer: " + aspectos_fortalecer.strip()
 
-    def _info(tema):
+    materiales_por_n = {"1": materiales_disponibles_1, "2": materiales_disponibles_2}
+
+    def _info(tema, n):
         base = "Tema o experiencia priorizada: " + tema + "\nParticipante: " + (primer_nombre or etiqueta)
         if tipo_participante == "gestante":
             base += " (mujer gestante)"
         else:
             base += " (banda de desarrollo: " + banda_etiqueta + ")"
-        return base + info_extra
+        base += info_extra_comun
+        materiales = materiales_por_n.get(n, "").strip()
+        if materiales:
+            base += "\nMateriales disponibles en el hogar para ESTA experiencia: " + materiales
+        else:
+            base += ("\nNo se registraron materiales adicionales del paquete didactico "
+                     "para ESTA experiencia especifica: no menciones materiales usados.")
+        return base
 
     trabajos = []
     for n, tema in [("1", tema_1), ("2", tema_2)]:
@@ -349,7 +367,7 @@ def generar_textos_planeacion_llamada(
                 "extension en una caja de texto pequena (no la fragmentes en varias "
                 "oraciones cortas)."
             ),
-            materia_prima=_info(tema),
+            materia_prima=_info(tema, n),
             perspectiva="planeacion",
             max_palabras=55,
             evitar_actividad=True,
@@ -362,7 +380,7 @@ def generar_textos_planeacion_llamada(
                 "la agente educativa por telefono, que hace la familia, y que explora o "
                 "vivencia " + etiqueta + "."
             ),
-            materia_prima=_info(tema),
+            materia_prima=_info(tema, n),
             perspectiva="planeacion",
             max_palabras=140,
             evitar_actividad=True,
@@ -375,7 +393,7 @@ def generar_textos_planeacion_llamada(
                 "sino la principal): duracion aproximada y materiales u objetos que "
                 "necesita la familia en casa."
             ),
-            materia_prima=_info(tema),
+            materia_prima=_info(tema, n),
             perspectiva="planeacion",
             max_palabras=60,
             evitar_actividad=True,

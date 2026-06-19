@@ -26,7 +26,8 @@ const CAMPOS_GUARDABLES = [
   "actividad_principal", "nombre_ronda", "link_ronda",
   "actividad_principal_llamada", "nombre_ronda_llamada", "link_ronda_llamada",
   "actividad_principal_2", "nombre_ronda_2", "link_ronda_2",
-  "modalidad_acompanamiento", "objetos_paquete", "aspectos_fortalecer",
+  "modalidad_acompanamiento", "objetos_paquete", "objetos_paquete_llamada",
+  "objetos_paquete_2", "aspectos_fortalecer",
 ];
 
 function tipoCuadernoSeleccionado() {
@@ -123,7 +124,6 @@ formulario.addEventListener("submit", async (e) => {
   const cuerpo = {
     nombre:          formulario.elements["nombre"].value.trim(),
     tipo_cuaderno:   tipo,
-    objetos_paquete: formulario.elements["objetos_paquete"].value.trim(),
   };
 
   if (!esGestante) {
@@ -135,14 +135,21 @@ formulario.addEventListener("submit", async (e) => {
     cuerpo.actividad_principal = formulario.elements["actividad_principal"].value.trim();
     cuerpo.nombre_ronda         = formulario.elements["nombre_ronda"].value.trim();
     cuerpo.link_ronda           = formulario.elements["link_ronda"].value.trim();
+    cuerpo.objetos_paquete      = formulario.elements["objetos_paquete"].value.trim();
   } else {
     cuerpo.tipo_participante     = tipoParticipante;
     cuerpo.actividad_principal   = formulario.elements["actividad_principal_llamada"].value.trim();
     cuerpo.nombre_ronda          = formulario.elements["nombre_ronda_llamada"].value.trim();
     cuerpo.link_ronda            = formulario.elements["link_ronda_llamada"].value.trim();
+    // objetos_paquete = materiales de la planeación 1, objetos_paquete_2 = de la
+    // planeación 2 — independientes (antes era un solo campo compartido entre las
+    // dos, lo que causaba que la página 4 dijera "no se utilizaron materiales"
+    // aunque sí se hubieran usado en la planeación 1, como reportó Jimena).
+    cuerpo.objetos_paquete       = formulario.elements["objetos_paquete_llamada"].value.trim();
     cuerpo.actividad_principal_2 = formulario.elements["actividad_principal_2"].value.trim();
     cuerpo.nombre_ronda_2        = formulario.elements["nombre_ronda_2"].value.trim();
     cuerpo.link_ronda_2          = formulario.elements["link_ronda_2"].value.trim();
+    cuerpo.objetos_paquete_2     = formulario.elements["objetos_paquete_2"].value.trim();
     cuerpo.modalidad_acompanamiento = formulario.elements["modalidad_acompanamiento"].value.trim();
     cuerpo.aspectos_fortalecer      = formulario.elements["aspectos_fortalecer"].value.trim();
   }

@@ -65,6 +65,7 @@ def init():
                 ("link_ronda_2", "TEXT"),
                 ("modalidad_acompanamiento", "TEXT"),
                 ("aspectos_fortalecer", "TEXT"),
+                ("objetos_paquete_2", "TEXT"),
             ]:
                 cur.execute(
                     f"ALTER TABLE planeaciones "
@@ -85,12 +86,15 @@ def guardar_planeacion(datos):
     Campos opcionales (solo se usan en "llamada"; se autocompletan si
     el llamador -el flujo de "hogar"- no los envía):
       tipo_participante, actividad_principal_2, nombre_ronda_2,
-      link_ronda_2, modalidad_acompanamiento, aspectos_fortalecer.
+      link_ronda_2, modalidad_acompanamiento, aspectos_fortalecer,
+      objetos_paquete_2 (materiales de la planeación 2 — independientes
+      de los de objetos_paquete, que en "llamada" son los de la planeación 1).
     """
     datos_db = dict(datos)
     for campo in ("tipo_participante", "actividad_principal_2",
                   "nombre_ronda_2", "link_ronda_2",
-                  "modalidad_acompanamiento", "aspectos_fortalecer"):
+                  "modalidad_acompanamiento", "aspectos_fortalecer",
+                  "objetos_paquete_2"):
         datos_db.setdefault(campo, None)
 
     # psycopg2 no serializa dicts a JSONB automáticamente
@@ -107,7 +111,7 @@ def guardar_planeacion(datos):
                      tipo_participante, banda_clave, banda_etiqueta,
                      actividad_principal, actividad_principal_2,
                      nombre_ronda, link_ronda, nombre_ronda_2, link_ronda_2,
-                     modalidad_acompanamiento, objetos_paquete,
+                     modalidad_acompanamiento, objetos_paquete, objetos_paquete_2,
                      aspectos_fortalecer, textos_generados)
                 VALUES
                     (%(nombre_nino)s, %(fecha_encuentro)s, %(genero)s,
@@ -116,7 +120,7 @@ def guardar_planeacion(datos):
                      %(actividad_principal)s, %(actividad_principal_2)s,
                      %(nombre_ronda)s, %(link_ronda)s, %(nombre_ronda_2)s,
                      %(link_ronda_2)s, %(modalidad_acompanamiento)s,
-                     %(objetos_paquete)s, %(aspectos_fortalecer)s,
+                     %(objetos_paquete)s, %(objetos_paquete_2)s, %(aspectos_fortalecer)s,
                      %(textos_generados)s)
                 RETURNING id
             """, datos_db)

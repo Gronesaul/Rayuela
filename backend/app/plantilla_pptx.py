@@ -28,12 +28,36 @@ def _normalizar(texto):
     return " ".join(texto.split())
 
 
+LARGO_MAXIMO_ETIQUETA = 200
+"""Las etiquetas/preguntas reales de los moldes del ICBF nunca superan este
+tamaño (la más larga, la de "paquete didáctico", tiene 124 caracteres). En
+cambio, los párrafos instructivos/de advertencia que traen algunas
+diapositivas (300-470 caracteres) a veces contienen por casualidad la misma
+palabra que una etiqueta real — p. ej. el párrafo de advertencia de la
+diapositiva de INTENCIONALIDAD en los moldes de llamada y de hogar dice
+"...que la intencionalidad debe estar ligada...". Sin este límite,
+find_question encontraba ese párrafo ANTES de llegar a la celda real de la
+tabla (porque recorre las formas en orden y devuelve la primera coincidencia),
+y la respuesta terminaba escrita encima de la celda equivocada (sobre
+"TALENTO HUMANO RESPONSABLE"), exactamente el desorden que reportó Jimena:
+"la intencionalidad está mal organizada, la deja arriba y va abajo"."""
+
+
 def find_question(slide, contains):
     """Busca el cuadro de texto de una pregunta por una subcadena de su texto
-    (ignorando saltos de línea y espacios extra, que varían entre moldes)."""
+    (ignorando saltos de línea y espacios extra, que varían entre moldes).
+
+    Ignora formas cuyo texto completo sea más largo que LARGO_MAXIMO_ETIQUETA
+    (ver su docstring) para no confundir un párrafo instructivo largo con la
+    etiqueta real de la pregunta."""
     contains_norm = _normalizar(contains).lower()
     for shape in slide.shapes:
-        if shape.has_text_frame and contains_norm in _normalizar(shape.text_frame.text).lower():
+        if not shape.has_text_frame:
+            continue
+        texto_normalizado = _normalizar(shape.text_frame.text)
+        if len(texto_normalizado) > LARGO_MAXIMO_ETIQUETA:
+            continue
+        if contains_norm in texto_normalizado.lower():
             return shape
     return None
 
