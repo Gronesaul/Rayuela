@@ -221,23 +221,24 @@ def generar_textos_planeacion(actividad, nombre_nino, banda_clave,
         ("intencionalidad", dict(
             banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
             instruccion=(
-                "la intencionalidad pedagogica de este encuentro en el hogar: "
-                "que habilidades, capacidades, vinculos o aprendizajes se busca "
-                "fortalecer con esta experiencia. "
-                "El verbo debe derivar del contenido ESPECIFICO de esta experiencia: "
-                "movimiento/coordinacion → 'Ejercitar' o 'Fortalecer'; "
-                "exploracion sensorial → 'Explorar' o 'Desarrollar'; "
-                "lenguaje/comunicacion → 'Estimular' o 'Enriquecer'; "
-                "juego simbolico → 'Favorecer' o 'Potenciar'; "
-                "vinculo afectivo → 'Propiciar' o 'Afianzar'; "
-                "autonomia → 'Potenciar' o 'Consolidar'. "
-                "PROHIBIDO usar 'fomentar' o 'promover' como primera opcion. "
-                "IMPORTANTE: NO menciones el nombre del participante en este texto. "
-                "Maximo 2 oraciones concisas."
+                "la intencionalidad pedagogica de este encuentro en el hogar. "
+                "Sigue EXACTAMENTE esta estructura y nivel tecnico: "
+                "VERBO + lista de 2 o 3 competencias/habilidades ESPECIFICAS que "
+                "esta experiencia desarrolla + conector ('a traves de', 'mediante', "
+                "'por medio de') + descripcion tecnica de la metodologia pedagogica. "
+                "Ejemplo del nivel esperado: 'Fomentar la escucha activa, el "
+                "seguimiento de instrucciones y el reconocimiento de normas y limites, "
+                "a traves de una experiencia que integra la coordinacion visomotriz y "
+                "la exploracion creativa con materiales concretos.' "
+                "Las competencias deben ser TECNICAS y ESPECIFICAS para esta "
+                "experiencia y para la banda de edad indicada — no genericas. "
+                "Una SOLA oracion, un UNICO verbo, extension de tres lineas en caja "
+                "pequena (maximo 40 palabras). "
+                "NUNCA menciones el nombre del participante."
             ),
             materia_prima=info_base,
             perspectiva="planeacion",
-            max_palabras=50,
+            max_palabras=45,
         )),
         ("experiencias_momento_uno", dict(
             banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
@@ -449,28 +450,23 @@ def generar_textos_planeacion_llamada(
             banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
             instruccion=(
                 "la intencionalidad pedagogica de esta experiencia del acompanamiento "
-                "telefonico. Debe ser UNA SOLA ORACION construida alrededor de UN UNICO "
-                "VERBO PRINCIPAL (no enumeres varias acciones con verbos distintos); "
-                "extiendela con complementos, conectores y clausulas explicativas para "
-                "que sea una oracion completa y desarrollada, de minimo tres lineas de "
-                "extension en una caja de texto pequena (no la fragmentes en varias "
-                "oraciones cortas). "
-                "El verbo principal DEBE derivar directamente del contenido de ESTA "
-                "experiencia especifica — lee el tema y extrae la accion central: "
-                "si la experiencia es de movimiento o coordinacion → usa 'Ejercitar' o 'Fortalecer'; "
-                "si es de exploracion sensorial o de materiales → usa 'Explorar' o 'Desarrollar'; "
-                "si es de lenguaje, comunicacion o narracion → usa 'Estimular' o 'Enriquecer'; "
-                "si es de juego simbolico o creatividad → usa 'Favorecer' o 'Potenciar'; "
-                "si es de vinculo afectivo o confianza → usa 'Propiciar' o 'Afianzar'; "
-                "si es de autonomia o toma de decisiones → usa 'Potenciar' o 'Consolidar'; "
-                "si es de reconocimiento corporal o identidad → usa 'Desarrollar' o 'Ampliar'. "
-                "PROHIBIDO usar 'fomentar' o 'promover' como primera opcion (son demasiado genericos). "
-                "PROHIBIDO mencionar el nombre del participante — la intencionalidad es un "
-                "objetivo pedagogico, no una descripcion del nino."
+                "telefonico. Sigue EXACTAMENTE esta estructura y nivel tecnico: "
+                "VERBO + lista de 2 o 3 competencias/habilidades ESPECIFICAS que "
+                "esta experiencia desarrolla + conector ('a traves de', 'mediante', "
+                "'por medio de') + descripcion tecnica de la metodologia pedagogica. "
+                "Ejemplo del nivel esperado: 'Fomentar la escucha activa, el "
+                "seguimiento de instrucciones y el reconocimiento de normas y limites, "
+                "a traves de una experiencia que integra la coordinacion visomotriz y "
+                "la exploracion creativa con materiales concretos.' "
+                "Las competencias deben ser TECNICAS y ESPECIFICAS para esta "
+                "experiencia y para la banda de edad indicada — no genericas. "
+                "Una SOLA oracion, un UNICO verbo, extension de tres lineas en caja "
+                "pequena (maximo 40 palabras). "
+                "NUNCA menciones el nombre del participante."
             ),
             materia_prima=_info(tema, n),
             perspectiva="planeacion",
-            max_palabras=55,
+            max_palabras=45,
             evitar_actividad=True,
         )))
         trabajos.append(("experiencia_principal_descripcion_" + n, dict(
