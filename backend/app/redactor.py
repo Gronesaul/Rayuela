@@ -214,9 +214,16 @@ def generar_textos_planeacion(actividad, nombre_nino, banda_clave,
         ("intencionalidad", dict(
             banda_clave=banda_clave, banda_etiqueta=banda_etiqueta,
             instruccion=(
-                "la intencionalidad pedagogica de este encuentro: que habilidades, "
-                "capacidades, vinculos o aprendizajes se busca fortalecer con esta "
-                "actividad. Maximo 2 oraciones concisas."
+                "la intencionalidad pedagogica de este encuentro en el hogar: "
+                "que habilidades, capacidades, vinculos o aprendizajes se busca "
+                "fortalecer con esta experiencia. "
+                "Elige un verbo ESPECIFICO y apropiado segun la naturaleza de la "
+                "experiencia (por ejemplo: explorar, estimular, fortalecer, favorecer, "
+                "promover, potenciar, propiciar, ampliar, ejercitar, enriquecer, "
+                "desarrollar, consolidar) — NO uses siempre el mismo verbo para todas "
+                "las planeaciones. "
+                "IMPORTANTE: NO menciones el nombre del participante en este texto. "
+                "Maximo 2 oraciones concisas."
             ),
             materia_prima=info_base,
             perspectiva="planeacion",
@@ -437,7 +444,14 @@ def generar_textos_planeacion_llamada(
                 "extiendela con complementos, conectores y clausulas explicativas para "
                 "que sea una oracion completa y desarrollada, de minimo tres lineas de "
                 "extension en una caja de texto pequena (no la fragmentes en varias "
-                "oraciones cortas)."
+                "oraciones cortas). "
+                "Elige un verbo ESPECIFICO segun la naturaleza de la experiencia "
+                "(explorar, estimular, fortalecer, favorecer, promover, potenciar, "
+                "propiciar, ampliar, ejercitar, enriquecer, desarrollar, consolidar, "
+                "afianzar, incentivar) — NO uses siempre el mismo verbo para todas "
+                "las planeaciones; que refleje la accion central de ESTA experiencia. "
+                "IMPORTANTE: NO menciones el nombre del participante en este texto; "
+                "la intencionalidad es un objetivo pedagogico, no una descripcion del nino."
             ),
             materia_prima=_info(tema, n),
             perspectiva="planeacion",

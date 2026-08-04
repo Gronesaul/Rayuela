@@ -28,19 +28,29 @@ def _normalizar(texto):
     return " ".join(texto.split())
 
 
-LARGO_MAXIMO_ETIQUETA = 200
-"""Las etiquetas/preguntas reales de los moldes del ICBF nunca superan este
-tamaño (la más larga, la de "paquete didáctico", tiene 124 caracteres). En
-cambio, los párrafos instructivos/de advertencia que traen algunas
-diapositivas (300-470 caracteres) a veces contienen por casualidad la misma
-palabra que una etiqueta real — p. ej. el párrafo de advertencia de la
-diapositiva de INTENCIONALIDAD en los moldes de llamada y de hogar dice
-"...que la intencionalidad debe estar ligada...". Sin este límite,
-find_question encontraba ese párrafo ANTES de llegar a la celda real de la
-tabla (porque recorre las formas en orden y devuelve la primera coincidencia),
-y la respuesta terminaba escrita encima de la celda equivocada (sobre
-"TALENTO HUMANO RESPONSABLE"), exactamente el desorden que reportó Jimena:
-"la intencionalidad está mal organizada, la deja arriba y va abajo"."""
+LARGO_MAXIMO_ETIQUETA = 285
+"""Las etiquetas/preguntas reales de los moldes del ICBF pueden llegar a
+este tamaño. La más larga encontrada es la primera pregunta del 'Registro de
+observaciones al desarrollo infantil mensual' del molde de llamada
+('¿Qué le gustó a (nombre de la niña o niño) del encuentro o acompañamiento?
+¿Qué no le gustó? ¿A que jugó? ¿Sobre qué conversó? ...' — 279 caracteres);
+se eligió 285 para tener un pequeño margen por encima de ella.
+
+Los párrafos instructivos/de advertencia que traen los moldes (los que no son
+etiquetas de preguntas sino texto de guía para Jimena) miden 300 caracteres
+o más (306, 473...) — por eso este umbral los sigue excluyendo correctamente.
+
+HISTORIA DEL VALOR:
+- Originalmente era 200, basado en la etiqueta más larga conocida en ese
+  momento (124 chars, la de "paquete didáctico"). Sin este límite,
+  find_question encontraba el párrafo instructivo de la diapositiva de
+  INTENCIONALIDAD ('...que la intencionalidad debe estar ligada...', ~473
+  chars) ANTES de llegar a la celda real, y la respuesta terminaba escrita
+  en el lugar equivocado (Bug 1 reportado por Jimena: "la intencionalidad
+  está mal organizada, la deja arriba y va abajo").
+- Se subió a 285 al descubrir que la primera pregunta del 'Registro de
+  observaciones' (slide 7 del molde de llamada) tiene 279 chars y quedaba
+  excluida con el umbral de 200, dejando esa casilla vacía (Bug 6)."""
 
 
 def find_question(slide, contains):

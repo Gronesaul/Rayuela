@@ -174,16 +174,32 @@ def generar_voces():
         f"Lo que observé / lo que pasó: {datos['observaciones']}"
     )
 
-    instrucciones = {
-        preguntas[0]: "la respuesta de la familia en primera persona ('nosotros como "
-                      "familia') sobre qué les gustó y qué no del encuentro/acompañamiento",
-        preguntas[1]: "la respuesta de la familia en primera persona sobre sugerencias "
-                      "para próximas experiencias",
-        preguntas[2]: "la respuesta de la familia en primera persona sobre lo que "
-                      "aprendieron de este encuentro/acompañamiento",
-        preguntas[3]: "la respuesta de la familia en primera persona sobre los "
-                      "compromisos para el próximo encuentro",
-    }
+    if tipo == "hogar":
+        instrucciones = {
+            preguntas[0]: "la respuesta de la familia en primera persona ('nosotros como "
+                          "familia') sobre qué les gustó y qué no del encuentro",
+            preguntas[1]: "la respuesta de la familia en primera persona sobre sugerencias "
+                          "para las próximas experiencias en el hogar",
+            preguntas[2]: "la respuesta de la familia en primera persona sobre lo que "
+                          "aprendieron de este encuentro",
+            preguntas[3]: "la respuesta de la familia en primera persona sobre los "
+                          "compromisos que asumen para el próximo encuentro",
+        }
+    else:  # llamada — las preguntas son distintas a las de hogar
+        instrucciones = {
+            preguntas[0]: "la respuesta de la familia en primera persona ('nosotros como "
+                          "familia') sobre qué les gustó y qué no les gustó de los "
+                          "acompañamientos a distancia vividos este mes",
+            preguntas[1]: "la respuesta de la familia en primera persona sobre para qué "
+                          "les sirvieron los acompañamientos a distancia y qué valor o "
+                          "beneficio encontraron en ellos",
+            preguntas[2]: "la respuesta de la familia en primera persona sobre cómo "
+                          "participó la niña, el niño o la mujer gestante en las "
+                          "experiencias propuestas durante los acompañamientos a distancia",
+            preguntas[3]: "la respuesta de la familia en primera persona sobre qué les "
+                          "gustaría vivir, explorar o aprender en los próximos "
+                          "acompañamientos a distancia",
+        }
 
     # 2b. Redactamos también las "voces del talento humano del servicio"
     # (la reflexión profesional de Jimena como agente educativa — tono
@@ -647,16 +663,32 @@ def completar_planeacion(planeacion_id):
 
     # Genera las voces (misma lógica que /api/generar-voces)
     preguntas = PREGUNTAS_HOGAR if tipo == "hogar" else PREGUNTAS_LLAMADA
-    instrucciones = {
-        preguntas[0]: "la respuesta de la familia en primera persona ('nosotros como "
-                      "familia') sobre qué les gustó y qué no del encuentro/acompañamiento",
-        preguntas[1]: "la respuesta de la familia en primera persona sobre sugerencias "
-                      "para próximas experiencias",
-        preguntas[2]: "la respuesta de la familia en primera persona sobre lo que "
-                      "aprendieron de este encuentro/acompañamiento",
-        preguntas[3]: "la respuesta de la familia en primera persona sobre los "
-                      "compromisos para el próximo encuentro",
-    }
+    if tipo == "hogar":
+        instrucciones = {
+            preguntas[0]: "la respuesta de la familia en primera persona ('nosotros como "
+                          "familia') sobre qué les gustó y qué no del encuentro",
+            preguntas[1]: "la respuesta de la familia en primera persona sobre sugerencias "
+                          "para las próximas experiencias en el hogar",
+            preguntas[2]: "la respuesta de la familia en primera persona sobre lo que "
+                          "aprendieron de este encuentro",
+            preguntas[3]: "la respuesta de la familia en primera persona sobre los "
+                          "compromisos que asumen para el próximo encuentro",
+        }
+    else:  # llamada — las preguntas son distintas a las de hogar
+        instrucciones = {
+            preguntas[0]: "la respuesta de la familia en primera persona ('nosotros como "
+                          "familia') sobre qué les gustó y qué no les gustó de los "
+                          "acompañamientos a distancia vividos este mes",
+            preguntas[1]: "la respuesta de la familia en primera persona sobre para qué "
+                          "les sirvieron los acompañamientos a distancia y qué valor o "
+                          "beneficio encontraron en ellos",
+            preguntas[2]: "la respuesta de la familia en primera persona sobre cómo "
+                          "participó la niña, el niño o la mujer gestante en las "
+                          "experiencias propuestas durante los acompañamientos a distancia",
+            preguntas[3]: "la respuesta de la familia en primera persona sobre qué les "
+                          "gustaría vivir, explorar o aprender en los próximos "
+                          "acompañamientos a distancia",
+        }
 
     preguntas_talento = (PREGUNTAS_TALENTO_HOGAR if tipo == "hogar"
                          else PREGUNTAS_TALENTO_LLAMADA)
